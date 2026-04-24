@@ -1,0 +1,1338 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytique ↔ Budget</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg:#F5F4F0; --surface:#fff; --border:#E2E0D8; --border-strong:#C8C5BB;
+    --text:#1A1916; --muted:#7A7770;
+    --accent:#2D5A27; --accent-light:#EBF4E9;
+    --warn:#8B3A0F;
+    --skip:#5A5650; --skip-light:#F0EFED;
+    --split:#1A4A8B; --split-light:#EBF0FA;
+    --hover:#EEF7EC; --assigned:#EAF6E6; --flash:#FFF176;
+    --sh:0 1px 3px rgba(0,0,0,.08),0 4px 12px rgba(0,0,0,.04);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+
+  /* ── HEADER ── */
+  .hdr{background:#1A1916;color:#fff;padding:13px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+  .hdr-left{display:flex;align-items:center;gap:14px}
+  .hdr-logo{height:32px;width:auto;opacity:.92;object-fit:contain;display:none}
+  .hdr-logo.v{display:block}
+  .hdr h1{font-size:14px;font-weight:600;font-family:'DM Mono',monospace;letter-spacing:.04em}
+  .hdr .sub{font-size:11px;color:#888;font-family:'DM Mono',monospace;margin-top:2px}
+  #badge{font-size:11px;font-family:'DM Mono',monospace;color:#AAA}
+
+  /* ── SCREENS ── */
+  .screen{display:none}
+
+  /* UPLOAD */
+  #su{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:85vh;gap:26px;padding:40px}
+  .utitle{font-family:'DM Mono',monospace;font-size:22px;text-align:center;line-height:1.5}
+  .utitle span{color:var(--accent)}
+  .ugrid{display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%;max-width:600px}
+  .ucard{background:var(--surface);border:2px dashed var(--border-strong);border-radius:12px;padding:26px 20px;text-align:center;cursor:pointer;transition:all .2s;position:relative}
+  .ucard:hover{border-color:var(--accent);background:var(--accent-light)}
+  .ucard.ok{border-style:solid;border-color:var(--accent);background:var(--accent-light)}
+  .ucard input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+  .ucard .ico{font-size:30px;margin-bottom:10px}
+  .ucard h3{font-size:13px;font-weight:600;margin-bottom:4px}
+  .ucard p{font-size:11px;color:var(--muted)}
+  .ucard .fn{margin-top:8px;font-size:11px;font-family:'DM Mono',monospace;color:var(--accent);font-weight:500;word-break:break-all}
+  .snote{font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-family:'DM Mono',monospace;text-align:center;max-width:600px;width:100%}
+  .ubtnrow{display:flex;gap:12px;align-items:center}
+  #btnStart{display:none;background:var(--accent);color:#fff;border:none;padding:13px 36px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif}
+  #btnStart:hover{background:#234820}
+  #btnStart.v{display:inline-block}
+  #btnReset{background:transparent;color:var(--muted);border:1px solid var(--border-strong);padding:12px 20px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif}
+  #btnReset:hover{background:var(--border);color:var(--text)}
+
+  /* MAIN */
+  #sm{padding:20px;display:grid;grid-template-rows:auto 1fr;gap:16px}
+  .prog-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 20px;display:flex;align-items:center;gap:16px}
+  #progLbl{font-size:12px;font-family:'DM Mono',monospace;white-space:nowrap;min-width:150px}
+  .prog-track{flex:1;height:5px;background:var(--border);border-radius:10px;overflow:hidden}
+  .prog-fill{height:100%;background:var(--accent);border-radius:10px;transition:width .4s}
+  #progPct{font-size:12px;font-family:'DM Mono',monospace;color:var(--muted)}
+  .btn-exp{background:#1A1916;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap}
+  .btn-exp:hover{background:#333}
+  .btn-exp:disabled{background:#888;cursor:wait}
+
+  .warea{display:grid;grid-template-columns:375px 1fr;gap:16px;align-items:start}
+
+  /* EXT PANEL */
+  .epanel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;position:sticky;top:68px;box-shadow:var(--sh)}
+  .phdr{background:#1A1916;color:#fff;padding:10px 18px;font-size:10px;font-family:'DM Mono',monospace;font-weight:500;letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
+  .navbtns{display:flex;gap:4px}
+  .navbtns button{width:24px;height:24px;border:1px solid rgba(255,255,255,.2);border-radius:4px;background:transparent;color:#fff;cursor:pointer;font-size:14px;line-height:1}
+  .navbtns button:disabled{opacity:.3;cursor:default}
+  .navbtns button:not(:disabled):hover{background:rgba(255,255,255,.12)}
+
+  .eamtblk{padding:16px 18px 12px;border-bottom:1px solid var(--border);text-align:center}
+  .eamt{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:var(--warn)}
+  .eamt.cr{color:var(--accent)}
+  .eamtlbl{font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:.06em;text-transform:uppercase}
+
+  .efields{padding:10px 18px 6px}
+  .efield{display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)}
+  .efield:last-child{border-bottom:none}
+  .eflbl{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.04em;min-width:86px;padding-top:1px;flex-shrink:0}
+  .efval{font-size:12px;font-weight:500;line-height:1.4;word-break:break-word}
+  .efval.mono{font-family:'DM Mono',monospace}
+
+  /* SPLIT */
+  .splitzone{display:none;padding:14px 18px;border-top:1px solid var(--border);background:var(--split-light)}
+  .splitzone.open{display:block}
+  .split-warn{background:#FFF3CD;border:1px solid #FFD966;border-radius:6px;padding:8px 12px;font-size:11px;color:#7A5800;margin-bottom:10px;display:flex;gap:6px;align-items:flex-start;line-height:1.5}
+  .split-warn .wi{flex-shrink:0;font-size:13px}
+  .splitzone>label{font-size:11px;font-weight:600;color:var(--split);display:block;margin-bottom:8px}
+  .splitzone input[type=number]{width:100%;padding:8px 12px;border:1px solid #BAD0EF;border-radius:6px;font-family:'DM Mono',monospace;font-size:15px;background:#fff}
+  .srem-bar{margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-family:'DM Mono',monospace;font-size:12px;background:#fff;border:1px solid #BAD0EF;border-radius:6px;padding:6px 12px}
+  .srem-bar .sl{color:var(--split);font-size:11px}
+  .srem-bar .sv{font-weight:600;color:var(--split)}
+  .srem-bar .sv.over{color:var(--warn)}
+  .srem-bar .sv.done{color:var(--accent)}
+  .salready{font-size:11px;font-family:'DM Mono',monospace;color:var(--split);margin-top:6px;opacity:.8}
+
+  .eactions{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--border)}
+  .btn-skip{flex:1;background:var(--skip-light);color:var(--skip);border:1px solid var(--border-strong);padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif}
+  .btn-skip:hover{background:#E2E0DB}
+  .btn-spl{flex:1;background:var(--split-light);color:var(--split);border:1px solid #BAD0EF;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif}
+  .btn-spl.on{background:var(--split);color:#fff;border-color:var(--split)}
+  .btn-spl:hover:not(.on){background:#DDE8F7}
+
+  /* BUDGET TABLE */
+  .bpanel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--sh)}
+  .chint{display:none;padding:8px 18px;font-size:12px;color:var(--accent);font-weight:600;border-bottom:1px solid var(--border);background:var(--accent-light);font-family:'DM Mono',monospace}
+  .chint.v{display:block}
+  .bwrap{overflow:auto;max-height:calc(100vh - 170px)}
+
+  table.bt{width:100%;border-collapse:collapse;font-size:11px}
+  table.bt thead{position:sticky;top:0;z-index:10}
+  table.bt th{background:#1A1916;color:#fff;padding:7px 9px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;border-right:1px solid rgba(255,255,255,.07);font-weight:500;cursor:pointer;user-select:none}
+  table.bt th:hover{background:#333}
+  table.bt th.col-hidden, table.bt td.col-hidden{width:18px!important;min-width:18px!important;max-width:18px!important;padding-left:3px!important;padding-right:3px!important;overflow:hidden!important;color:transparent!important;white-space:nowrap!important}
+  table.bt th.col-hidden::after{content:'↔';color:#fff;font-size:10px}
+  table.bt td.col-hidden *{display:none!important}
+  table.bt td{padding:5px 9px;border-bottom:1px solid var(--border);border-right:1px solid #EBEBEB;white-space:nowrap}
+  table.bt td.lc{white-space:normal;min-width:160px;max-width:250px}
+  table.bt td.nc{font-family:'DM Mono',monospace;text-align:right}
+  table.bt td.ac{font-family:'DM Mono',monospace;text-align:right;font-weight:600;color:var(--warn)}
+  table.bt td.ac.ok{background:#FFF8F0;color:var(--warn)}
+  table.bt td.fc{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);max-width:160px;white-space:normal;word-break:break-all;line-height:1.5}
+  table.bt td.formula-warn{background:#FFE6E6!important;color:#9B1C1C!important;font-weight:700}
+
+  tr.rh td{background:#D4EAF3;font-weight:700;font-size:11px}
+  tr.rs td{background:#CEDBE6;font-weight:700}
+  tr.rt td{font-weight:700;font-family:'DM Mono',monospace;font-size:12px;background:#FAFAF6}
+  tr.rsum td{background:#F5F0E4;font-weight:700;font-family:'DM Mono',monospace}
+  tr.rd{cursor:pointer}
+  tr.rd:hover td{background:var(--hover)!important}
+  tr.rd.asgn td{background:var(--assigned)}
+  tr.rd.asgn td.ac{color:var(--accent)}
+  tr.rd.flash td{background:var(--flash)!important}
+
+  /* DONE */
+  #sd{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;gap:20px;text-align:center;padding:40px}
+  .dico{font-size:52px}
+  .dtitle{font-family:'DM Mono',monospace;font-size:22px}
+  .dsub{color:var(--muted);max-width:420px;line-height:1.6;font-size:13px}
+  .skipbox{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 20px;text-align:left;max-width:600px;width:100%;max-height:260px;overflow-y:auto}
+  .skipbox h4{font-size:11px;font-family:'DM Mono',monospace;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+  .ski{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px;gap:10px}
+  .ski:last-child{border-bottom:none}
+  .ski-d{flex:1;min-width:0}
+  .ski-d .m{font-weight:600}
+  .ski-d .s{font-size:10px;color:var(--muted);margin-top:1px}
+  .ski-ndoc{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap}
+  .ski-amt{font-family:'DM Mono',monospace;font-weight:600;color:var(--warn);white-space:nowrap}
+  .btn-dl{background:var(--accent);color:#fff;border:none;padding:13px 36px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif}
+  .btn-dl:hover{background:#234820}
+  .btn-dl:disabled{background:#888;cursor:wait}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border-strong);padding:9px 22px;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif}
+
+  /* EXPORT OVERLAY */
+  .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center}
+  .overlay.v{display:flex}
+  .obox{background:#fff;border-radius:16px;padding:40px 48px;text-align:center;max-width:400px}
+  .obox .spin{font-size:40px;animation:spin 1s linear infinite;display:block;margin-bottom:16px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .obox h3{font-family:'DM Mono',monospace;font-size:16px;margin-bottom:8px}
+  .obox p{font-size:13px;color:var(--muted);line-height:1.6}
+
+  .toast{position:fixed;bottom:28px;right:28px;background:#1A1916;color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;font-weight:500;box-shadow:0 4px 16px rgba(0,0,0,.15);transform:translateY(16px);opacity:0;transition:all .25s;z-index:300;max-width:300px}
+  .toast.v{opacity:1;transform:translateY(0)}
+  .toast.ok{background:var(--accent)}
+
+  @media(max-width:860px){.warea{grid-template-columns:1fr}.ugrid{grid-template-columns:1fr}.epanel{position:static}.bwrap{max-height:45vh}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-left">
+    <label title="Cliquer pour charger votre logo" style="cursor:pointer;position:relative">
+      <img id="hdrLogo" class="hdr-logo" src="" alt="Logo">
+      <span id="hdrLogoPlaceholder" style="font-size:11px;color:#555;font-family:'DM Mono',monospace;border:1px dashed #444;padding:4px 8px;border-radius:4px;white-space:nowrap">+ Logo</span>
+      <input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="loadLogo(this)">
+    </label>
+    <div><h1 id="appTitle">ANALYTIQUE ↔ BUDGET</h1><div class="sub">Outil de mise à jour budgétaire</div></div>
+  </div>
+  <div id="badge">—</div>
+</header>
+
+<!-- UPLOAD -->
+<div id="su" class="screen">
+  <div class="utitle">Charger les fichiers<br><span>pour démarrer</span></div>
+  <div class="ugrid">
+    <div class="ucard" id="cb">
+      <input type="file" accept=".xlsx,.xls" onchange="loadFile('b',this)">
+      <div class="ico">📊</div><h3>Budget Excel</h3><p>Fichier EVENT_XXXXX.xlsx</p>
+      <div class="fn" id="fnb"></div>
+    </div>
+    <div class="ucard" id="ce">
+      <input type="file" accept=".xlsx,.xls" onchange="loadFile('e',this)">
+      <div class="ico">📋</div><h3>Extraction Winbooks</h3><p>Historique périodique analytique</p>
+      <div class="fn" id="fne"></div>
+    </div>
+  </div>
+  <div class="snote" id="snote">💾 La session est sauvegardée automatiquement dans le navigateur.</div>
+  <div class="ubtnrow">
+    <button id="btnStart" onclick="startSession()">▶ Démarrer la session</button>
+    <button id="btnReset" onclick="resetAll()">↺ Réinitialiser</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="sm" class="screen">
+  <div class="prog-wrap">
+    <div id="progLbl">0 / 0 lignes</div>
+    <div class="prog-track"><div class="prog-fill" id="progF" style="width:0%"></div></div>
+    <div id="progPct">0%</div>
+    <button class="btn-exp" onclick="exportExcel()" id="btnExp">⬇ Exporter Excel</button>
+  </div>
+  <div class="warea">
+    <div class="epanel">
+      <div class="phdr">
+        <span id="navLbl">— / —</span>
+        <div class="navbtns">
+          <button onclick="navExt(-1)" id="navP" disabled>‹</button>
+          <button onclick="navExt(+1)" id="navN" disabled>›</button>
+        </div>
+      </div>
+      <div class="eamtblk">
+        <div class="eamt" id="eamt">—</div>
+        <div class="eamtlbl" id="eamtlbl">à affecter</div>
+      </div>
+      <div class="efields" id="efields"></div>
+      <div class="splitzone" id="sz">
+        <div class="split-warn"><span class="wi">⚠️</span><span>En mode split, la formule dans la colonne Analytique sera plus complexe et plus difficile à modifier manuellement par la suite. À utiliser avec précaution.</span></div>
+        <label>Montant partiel à affecter (€)</label>
+        <input type="number" id="sinput" step="0.01" min="0.01" placeholder="0.00" oninput="onSplit()">
+        <div class="srem-bar">
+          <span class="sl">Restant disponible</span>
+          <span class="sv" id="srem">—</span>
+        </div>
+        <div class="salready" id="salready"></div>
+      </div>
+      <div class="eactions">
+        <button class="btn-skip" onclick="skipLine()">⏩ Passer</button>
+        <button class="btn-spl" id="btnSpl" onclick="toggleSplit()">✂ Splitter</button>
+      </div>
+    </div>
+    <div class="bpanel">
+      <div class="chint v" id="chint">↓ Cliquez sur une ligne budgétaire pour y affecter le montant</div>
+      <div class="bwrap">
+        <table class="bt"><thead id="bth"></thead><tbody id="btb"></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DONE -->
+<div id="sd" class="screen">
+  <div class="dico">✅</div>
+  <div class="dtitle">Toutes les lignes traitées !</div>
+  <div class="dsub">Exportez le fichier Excel final ci-dessous.</div>
+  <div class="skipbox" id="skipbox" style="display:none">
+    <h4>⏩ Lignes passées (non affectées)</h4>
+    <div id="skipitems"></div>
+  </div>
+  <button class="btn-dl" id="btnDl" onclick="exportExcel()">⬇ Télécharger le budget mis à jour</button>
+  <button class="btn-ghost" onclick="resetAll()">↺ Nouvelle session</button>
+</div>
+
+<!-- EXPORT OVERLAY -->
+<div class="overlay" id="overlay">
+  <div class="obox">
+    <span class="spin">⚙️</span>
+    <h3>Génération de l'Excel…</h3>
+    <p id="overlayMsg">Chargement de l'environnement Python<br>(<em>une seule fois, ~10 secondes</em>)</p>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+//  CONSTANTS & STATE
+// ═══════════════════════════════════════════
+const SK = 'abv4';
+
+let budgetBytes = null;     // raw Uint8Array of original budget file
+let budgetWb = null;        // xlsx.js parsed workbook (for UI display only)
+let bMeta = { analCol:8, factCol:13, headerRow:7, rows:[] }; // 0-based
+
+let extRows = [];
+let curIdx = 0;
+let splitMode = false;
+let splitUsed = 0;
+
+// Session persisted to localStorage
+let S = { processed:{}, rowData:{}, curIdx:0 };
+let hiddenCols = new Set();
+
+// ═══════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════
+function loadLogo(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    document.getElementById('hdrLogo').src = dataUrl;
+    document.getElementById('hdrLogo').classList.add('v');
+    document.getElementById('hdrLogoPlaceholder').style.display = 'none';
+    try { localStorage.setItem('hdr_logo', dataUrl); } catch(e) {}
+  };
+  reader.readAsDataURL(file);
+}
+
+window.onload = () => {
+  show('su'); // show upload screen
+  // Restore logo if saved
+  try {
+    const savedLogo = localStorage.getItem('hdr_logo');
+    if (savedLogo) {
+      document.getElementById('hdrLogo').src = savedLogo;
+      document.getElementById('hdrLogo').classList.add('v');
+      document.getElementById('hdrLogoPlaceholder').style.display = 'none';
+    }
+  } catch(e) {}
+  try {
+    const s = localStorage.getItem(SK);
+    if (s) {
+      S = JSON.parse(s);
+      document.getElementById('snote').textContent =
+        '💾 Session en cours trouvée — rechargez vos fichiers pour continuer.';
+    }
+  } catch(e) {}
+};
+
+function save() {
+  S.curIdx = curIdx;
+  localStorage.setItem(SK, JSON.stringify(S));
+  document.getElementById('badge').textContent = '💾 ' + new Date().toLocaleTimeString('fr-BE');
+}
+
+function resetAll() {
+  if (!confirm('Réinitialiser la session ?')) return;
+  localStorage.removeItem(SK);
+  location.reload();
+}
+
+// ═══════════════════════════════════════════
+//  FILE LOADING
+// ═══════════════════════════════════════════
+function loadFile(type, input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const bytes = new Uint8Array(e.target.result);
+    if (type === 'b') {
+      budgetBytes = bytes;
+      budgetWb = XLSX.read(bytes, { type:'array', cellStyles:true, cellNF:true });
+      parseBudget();
+      updateEventTitleFromBudget();
+      // Detect already-processed ndocs from col N of the budget file
+      detectAlreadyProcessed(bytes);
+      document.getElementById('fnb').textContent = file.name;
+      document.getElementById('cb').classList.add('ok');
+    } else {
+      parseExtraction(XLSX.read(bytes, { type:'array', cellNF:true }));
+      document.getElementById('fne').textContent = file.name;
+      document.getElementById('ce').classList.add('ok');
+    }
+    checkReady();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── Detect already-processed N°Docs from budget col N ──
+function detectAlreadyProcessed(bytes) {
+  // Use xlsx.js to read col N (factCol, 0-based=13, 1-based=14)
+  const wb = XLSX.read(bytes, { type:'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  const fC = bMeta.factCol; // 0-based col index
+  const aC = bMeta.analCol;
+
+  const processedNdocs = new Set();
+
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const factCell = ws[XLSX.utils.encode_cell({r, c: fC})];
+    if (!factCell || !factCell.v) continue;
+    const val = String(factCell.v).trim();
+    // Skip header-like values
+    if (!val || val.startsWith('=') || val === 'N° Factures') continue;
+    // Parse pipe-separated ndocs
+    val.split('|').forEach(nd => {
+      nd = nd.trim();
+      if (nd) processedNdocs.add(nd);
+    });
+  }
+
+  // Mark extraction lines as already processed if their N°Doc is in processedNdocs
+  // We'll apply this after extRows are loaded, in startSession
+  S._alreadyProcessedNdocs = [...processedNdocs];
+  console.log('Already processed N°Docs in budget file:', processedNdocs);
+}
+
+
+function cellText(ws, addr) {
+  const cell = ws[addr];
+  if (!cell) return '';
+  const val = cell.w !== undefined ? cell.w : cell.v;
+  return String(val || '').trim();
+}
+
+function updateEventTitleFromBudget() {
+  try {
+    const ws = budgetWb && budgetWb.Sheets[budgetWb.SheetNames[0]];
+    if (!ws) return;
+    const title = cellText(ws, 'A3') || cellText(ws, 'E4');
+    const el = document.getElementById('appTitle');
+    if (el) el.textContent = title ? title : 'ANALYTIQUE ↔ BUDGET';
+  } catch(e) {
+    console.warn('Titre événement non détecté', e);
+  }
+}
+
+// ═══════════════════════════════════════════
+//  PARSE BUDGET
+// ═══════════════════════════════════════════
+function parseBudget() {
+  const ws = budgetWb.Sheets[budgetWb.SheetNames[0]];
+  if (!ws || !ws['!ref']) return;
+  const range = XLSX.utils.decode_range(ws['!ref']);
+
+  // Find ANALYTIQUE (second occurrence) and COMMENTAIRE col
+  let analCol = 8, commentCol = 12, headerRow = 7, analFound = 0;
+  for (let r = range.s.r; r <= Math.min(range.e.r, 25); r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({r,c})];
+      if (!cell || !cell.v) continue;
+      const v = String(cell.v).trim().toUpperCase();
+      if (v === 'ANALYTIQUE') { analFound++; if (analFound === 2) { analCol=c; headerRow=r; } }
+      if (v === 'COMMENTAIRE') commentCol = c;
+    }
+  }
+
+  bMeta = { analCol, factCol: commentCol+1, headerRow, rows:[] };
+
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const fc = ws[XLSX.utils.encode_cell({r, c:range.s.c})];
+    let bg = '00000000';
+    try { const fg = fc&&fc.s&&fc.s.fgColor; if(fg&&fg.rgb) bg=fg.rgb; } catch(e) {}
+    const bold = (fc&&fc.s&&fc.s.bold)||false;
+
+    let rowType='other', isClick=false;
+    if      (bg==='FFD4EAF3')               rowType='rh';
+    else if (bg==='FFCEDBE6')               rowType='rs';
+    else if (bold&&bg.startsWith('FF')&&bg!=='FF000000') rowType='rt';
+    else if (bold)                           rowType='rsum';
+    else if (!bold)                          { rowType='rd'; isClick=true; }
+
+    const cells=[];
+    for (let c=range.s.c; c<=Math.max(range.e.c,bMeta.factCol); c++) {
+      const cell=ws[XLSX.utils.encode_cell({r,c})]||{};
+      cells.push({v:cell.v!==undefined?cell.v:null,f:cell.f||null});
+    }
+    bMeta.rows.push({rowNum:r+1,rowIdx:r,isClick,rowType,cells});
+  }
+}
+
+// ═══════════════════════════════════════════
+//  PARSE EXTRACTION
+// ═══════════════════════════════════════════
+function parseExtraction(wb) {
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const data = XLSX.utils.sheet_to_json(ws, {header:1, raw:true});
+  let hRow=-1;
+  for (let i=0;i<data.length;i++) {
+    if (data[i]&&data[i].some(v=>v&&(String(v).toLowerCase().includes('libellé')||String(v).toLowerCase().includes('libelle')))) {hRow=i;break;}
+  }
+  if (hRow<0) { toast('En-têtes introuvables dans l\'extraction.','warn'); return; }
+
+  const hd=data[hRow].map(v=>String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim());
+  const ci=kw=>hd.findIndex(h=>h.includes(kw));
+  const cL=ci('libelle'),cN=ci('nom'),cP=ci('period'),cJ=ci('journal'),
+        cD=ci('doc'),cDt=ci('date'),cS=ci('solde'),cC=ci('comment');
+
+  extRows=[];
+  for (let i=hRow+1;i<data.length;i++) {
+    const r=data[i];
+    if (!r||r.every(v=>v===null||v===undefined||v==='')) continue;
+    const ndoc=String(r[cD]||'').trim();
+    if (!ndoc) continue; // skip total rows (no N°Doc)
+
+    const solde=parseFloat(r[cS])||0;
+    const commentaire=String(r[cC]||'').trim();
+
+    let dateVal=r[cDt];
+    if (typeof dateVal==='number') {
+      const d=XLSX.SSF.parse_date_code(dateVal);
+      dateVal=`${String(d.d).padStart(2,'0')}/${String(d.m).padStart(2,'0')}/${d.y}`;
+    } else dateVal=String(dateVal||'');
+
+    // Key: ndoc + rounded abs solde + commentaire start (for same-ndoc different amounts)
+    const key=ndoc+'§'+Math.round(Math.abs(solde)*100)+'§'+commentaire.substring(0,40);
+
+    extRows.push({libelle:String(r[cL]||'').trim(),nom:String(r[cN]||'').trim(),
+      periode:String(r[cP]||'').trim(),journal:String(r[cJ]||'').trim(),
+      ndoc,date:dateVal,solde,commentaire,key});
+  }
+}
+
+// ═══════════════════════════════════════════
+//  START SESSION
+// ═══════════════════════════════════════════
+function checkReady() {
+  const ok = budgetWb && extRows.length>0;
+  document.getElementById('btnStart').classList.toggle('v',ok);
+}
+
+function startSession() {
+  if (!budgetWb||!extRows.length) return;
+
+  // Apply already-processed N°Docs from budget file
+  // Any extraction line whose N°Doc was found in col N → mark as processed
+  const existingNdocs = new Set(S._alreadyProcessedNdocs||[]);
+  extRows.forEach(ext => {
+    if (existingNdocs.has(ext.ndoc) && !S.processed[ext.key]) {
+      // Already in the Excel file from a previous session
+      S.processed[ext.key] = { fromFile:true, skipped:false, assignments:[] };
+    }
+  });
+
+  curIdx = S.curIdx||0;
+  advance();
+  show('sm');
+  renderBudget();
+  renderExt();
+  updateProg();
+}
+
+function advance() {
+  while (curIdx<extRows.length && S.processed[extRows[curIdx].key]) curIdx++;
+}
+
+// ═══════════════════════════════════════════
+//  BUDGET TABLE
+// ═══════════════════════════════════════════
+function renderBudget() {
+  const hd=document.getElementById('bth'),bd=document.getElementById('btb');
+  const aC=bMeta.analCol,fC=bMeta.factCol;
+  const maxC=bMeta.rows.reduce((m,r)=>Math.max(m,r.cells.length),0);
+  const hRow=bMeta.rows.find(r=>r.rowIdx===bMeta.headerRow);
+  const hCells=hRow?hRow.cells:[];
+
+  const tr=document.createElement('tr');
+  for(let c=0;c<maxC;c++){
+    const th=document.createElement('th');
+    th.dataset.col=c;
+    th.title='Cliquer pour réduire/afficher cette colonne';
+    th.textContent=c===fC?'N° Factures':(hCells[c]?String(hCells[c].v||''):'');
+    if(hiddenCols.has(c)) th.classList.add('col-hidden');
+    th.addEventListener('click',()=>toggleColumn(c));
+    tr.appendChild(th);
+  }
+  hd.innerHTML='';hd.appendChild(tr);
+  bd.innerHTML='';
+
+  bMeta.rows.forEach(row=>{
+    const tr=document.createElement('tr');
+    tr.dataset.rn=row.rowNum;
+    if(row.rowType) tr.classList.add(row.rowType);
+    const rd=S.rowData[row.rowNum];
+    if(rd) tr.classList.add('asgn');
+    if(row.isClick){tr.addEventListener('click',()=>assign(row.rowNum));tr.title='Affecter à cette ligne';}
+
+    row.cells.forEach((cell,ci)=>{
+      const td=document.createElement('td');
+      if(hiddenCols.has(ci)) td.classList.add('col-hidden');
+      const isA=ci===aC,isF=ci===fC;
+      if(ci===0) td.classList.add('lc');
+      else if(isA) td.classList.add('ac');
+      else if(isF) td.classList.add('fc');
+      else td.classList.add('nc');
+
+      if(isF) {
+        td.textContent=rd?mergeDocs(existingDocsForRow(row.rowNum), rd.ndocs).join(' | '):(cell.v!=null?String(cell.v||''):'');
+      } else if(isA) {
+        if(rd){
+          const n=evalCellValue(row.rowIdx, ci);
+          td.textContent=isDisplayValue(n)?fmtDisplayValue(n):fmt(rd.parts.reduce((s,p)=>s+p.signed,0));
+          td.classList.add('ok');
+        } else {
+          td.textContent=(cell.v!=null||cell.f)?fmtCell(cell,row.rowIdx,ci):'';
+          markUnsupportedFormula(td, cell, row.rowIdx, ci);
+        }
+      } else {
+        td.textContent=(cell.v!=null||cell.f)?fmtCell(cell,row.rowIdx,ci):'';
+        markUnsupportedFormula(td, cell, row.rowIdx, ci);
+      }
+      tr.appendChild(td);
+    });
+    bd.appendChild(tr);
+  });
+}
+
+
+function toggleColumn(colIdx){
+  if(hiddenCols.has(colIdx)) hiddenCols.delete(colIdx);
+  else hiddenCols.add(colIdx);
+  renderBudget();
+}
+
+function fmtCell(c, rowIdx=null, colIdx=null) {
+  if(!c || (c.v===null||c.v===undefined) && !c.f) return '';
+
+  // If the cell contains an Excel formula, show its calculated value in the tool.
+  // xlsx.js reads formulas but does not recalculate them, so we evaluate the
+  // formulas used in the budget view ourselves: =X+Y, SOMME/SUM, SOUS.TOTAL(9;...), SUMIF and EXACT.
+  const hasFormula = !!c.f || (typeof c.v==='string' && c.v.trim().startsWith('='));
+  if(hasFormula && rowIdx!==null && colIdx!==null){
+    const n = evalCellValue(rowIdx, colIdx);
+    if(isDisplayValue(n)) return fmtDisplayValue(n);
+    const formulaText = String(c.f || c.v).replace(/^=/,'');
+    if(/\bSUMIF\s*\(/i.test(formulaText)) return 'SUMIF';
+    return '=' + formulaText;
+  }
+
+  if(typeof c.v==='number'){if(c.v===0)return '0';return c.v.toLocaleString('fr-BE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  if(typeof c.v==='boolean') return c.v ? 'VRAI' : 'FAUX';
+  return String(c.v);
+}
+function isDisplayValue(v){return Number.isFinite(v) || typeof v === 'boolean' || typeof v === 'string';}
+function fmtDisplayValue(v){
+  if(typeof v==='boolean') return v ? 'VRAI' : 'FAUX';
+  if(typeof v==='string') return v;
+  return fmt(v);
+}
+function fmt(n){n=parseFloat(n)||0;if(n===0)return '0';return n.toLocaleString('fr-BE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function rawFormula(c){return c ? String(c.f || (typeof c.v==='string'?c.v:'')) : '';}
+function markUnsupportedFormula(td, c, rowIdx, colIdx){
+  const f=rawFormula(c).replace(/^=/,'').trim();
+  if(!f) return;
+  const n=evalCellValue(rowIdx,colIdx);
+  if(!isDisplayValue(n) && /\bSUMIF\s*\(/i.test(f)) {
+    td.classList.add('formula-warn');
+    td.title = '=' + f;
+  }
+}
+
+function cellObj(rowIdx, colIdx){
+  const row=bMeta.rows.find(r=>r.rowIdx===rowIdx);
+  return row ? (row.cells[colIdx]||{}) : {};
+}
+function colLettersToIndex(letters){
+  let n=0;
+  String(letters||'').toUpperCase().split('').forEach(ch=>{ n=n*26+(ch.charCodeAt(0)-64); });
+  return n-1;
+}
+function parseA1(ref){
+  const m=String(ref||'').replace(/\$/g,'').match(/^([A-Z]+)(\d+)$/i);
+  if(!m) return null;
+  return { c:colLettersToIndex(m[1]), r:parseInt(m[2],10)-1 };
+}
+function parseLooseNumber(v){
+  if(v===null||v===undefined||v==='') return NaN;
+  if(typeof v==='number') return v;
+  let s=String(v).trim();
+  if(!s || s.startsWith('=')) return NaN;
+  s=s.replace(/\s/g,'').replace(/€/g,'');
+  if(s.includes(',')) s=s.replace(/\./g,'').replace(',', '.');
+  const n=parseFloat(s);
+  return Number.isFinite(n)?n:NaN;
+}
+function evalRangeSum(rangeRef, stack){
+  const parts=String(rangeRef||'').split(':');
+  const a=parseA1(parts[0]), b=parseA1(parts[1]||parts[0]);
+  if(!a||!b) return NaN;
+  let sum=0;
+  const r1=Math.min(a.r,b.r), r2=Math.max(a.r,b.r), c1=Math.min(a.c,b.c), c2=Math.max(a.c,b.c);
+  for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++){
+    const v=evalCellValue(r,c,stack);
+    if(Number.isFinite(v)) sum+=v;
+  }
+  return sum;
+}
+function evalCellValue(rowIdx, colIdx, stack=new Set()){
+  const key=rowIdx+':'+colIdx;
+  if(stack.has(key)) return NaN;
+  stack.add(key);
+
+  const c=cellObj(rowIdx,colIdx);
+  const formula = c.f ? String(c.f) : (typeof c.v==='string' && c.v.trim().startsWith('=') ? c.v.trim().slice(1) : '');
+  let val;
+  if(formula) val=evalFormula(formula,stack);
+  else val=parseLooseNumber(c.v);
+
+  const rowNum=rowIdx+1;
+  if(colIdx===bMeta.analCol && S.rowData[rowNum]){
+    const add=S.rowData[rowNum].parts.reduce((s,p)=>s+p.signed,0);
+    val=(Number.isFinite(val)?val:0)+add;
+  }
+
+  stack.delete(key);
+  return val;
+}
+function splitArgs(args){
+  const out=[]; let cur='', depth=0, quote=null;
+  for(const ch of String(args||'')){
+    if(quote){ cur+=ch; if(ch===quote) quote=null; continue; }
+    if(ch==='"' || ch==="'"){ quote=ch; cur+=ch; continue; }
+    if(ch==='('){ depth++; cur+=ch; continue; }
+    if(ch===')'){ depth--; cur+=ch; continue; }
+    if((ch===',' || ch===';') && depth===0){ out.push(cur.trim()); cur=''; continue; }
+    cur+=ch;
+  }
+  if(cur.trim() || args==='') out.push(cur.trim());
+  return out;
+}
+function stripQuotes(s){
+  s=String(s??'').trim();
+  if((s.startsWith('"')&&s.endsWith('"')) || (s.startsWith("'")&&s.endsWith("'"))) return s.slice(1,-1);
+  return s;
+}
+function cellRef(r,c){
+  let n=c+1, letters='';
+  while(n>0){ const rem=(n-1)%26; letters=String.fromCharCode(65+rem)+letters; n=Math.floor((n-1)/26); }
+  return letters+(r+1);
+}
+function evalTextValue(token, stack){
+  token=String(token??'').trim();
+  if(!token) return '';
+  const quoted=stripQuotes(token);
+  if(quoted!==token) return quoted;
+  const a=parseA1(token.replace(/\$/g,''));
+  if(a){
+    const c=cellObj(a.r,a.c);
+    const v=evalCellValue(a.r,a.c,stack);
+    if(Number.isFinite(v) || typeof v==='boolean') return v;
+    return c.v==null ? '' : String(c.v);
+  }
+  const n=parseLooseNumber(token);
+  return Number.isFinite(n)?n:token;
+}
+function criteriaMatches(value, criteriaRaw, stack){
+  let crit=evalTextValue(criteriaRaw, stack);
+  if(typeof crit==='boolean') return Boolean(value)===crit;
+  crit=stripQuotes(String(crit??'').trim());
+  const m=crit.match(/^(>=|<=|<>|>|<|=)(.*)$/);
+  const op=m?m[1]:'=';
+  let rhs=stripQuotes((m?m[2]:crit).trim());
+  const vn=parseLooseNumber(value), rn=parseLooseNumber(rhs);
+  if(Number.isFinite(vn) && Number.isFinite(rn)){
+    if(op==='>') return vn>rn; if(op==='<') return vn<rn; if(op==='>=') return vn>=rn; if(op==='<=') return vn<=rn; if(op==='<>') return vn!==rn; return vn===rn;
+  }
+  const vs=String(value??''), rs=String(rhs??'');
+  if(op==='<>') return vs!==rs;
+  if(op==='=') return vs===rs;
+  return false;
+}
+function evalSumIf(argsText, stack){
+  const args=splitArgs(argsText);
+  if(args.length<2) return NaN;
+  const criteriaRange=args[0], criteria=args[1], sumRange=args[2] || args[0];
+  const crParts=String(criteriaRange).split(':'), srParts=String(sumRange).split(':');
+  const ca=parseA1(crParts[0]), cb=parseA1(crParts[1]||crParts[0]);
+  const sa=parseA1(srParts[0]), sb=parseA1(srParts[1]||srParts[0]);
+  if(!ca||!cb||!sa||!sb) return NaN;
+  const rows=Math.abs(cb.r-ca.r)+1, cols=Math.abs(cb.c-ca.c)+1;
+  const srRows=Math.abs(sb.r-sa.r)+1, srCols=Math.abs(sb.c-sa.c)+1;
+  let sum=0;
+  for(let i=0;i<rows;i++) for(let j=0;j<cols;j++){
+    const cr=ca.r + (ca.r<=cb.r?i:-i), cc=ca.c + (ca.c<=cb.c?j:-j);
+    const rr=sa.r + (sa.r<=sb.r?Math.min(i,srRows-1):-Math.min(i,srRows-1));
+    const sc=sa.c + (sa.c<=sb.c?Math.min(j,srCols-1):-Math.min(j,srCols-1));
+    const cv=evalTextValue(cellRef(cr,cc),stack);
+    if(criteriaMatches(cv, criteria, stack)){
+      const n=evalCellValue(rr,sc,stack);
+      if(Number.isFinite(n)) sum+=n;
+    }
+  }
+  return sum;
+}
+function evalExact(argsText, stack){
+  const args=splitArgs(argsText);
+  if(args.length<2) return NaN;
+  return String(evalTextValue(args[0],stack)) === String(evalTextValue(args[1],stack));
+}
+function evalFormula(formula, stack){
+  let expr=String(formula||'').replace(/^=/,'').trim();
+  if(!expr) return NaN;
+  expr=expr.replace(/SOUS\.TOTAL/gi,'SUBTOTAL').replace(/SOMME/gi,'SUM');
+
+  const exactOnly=expr.match(/^EXACT\s*\((.*)\)$/i);
+  if(exactOnly) return evalExact(exactOnly[1], stack);
+
+  expr=expr.replace(/SUMIF\s*\(([^()]*)\)/gi, (m, args)=>{
+    const n=evalSumIf(args,stack);
+    return Number.isFinite(n)?String(n):'NaN';
+  });
+
+  expr=expr.replace(/SUBTOTAL\s*\(\s*9\s*[,;]\s*([^()]+?)\s*\)/gi, (m, range)=>{
+    const n=evalRangeSum(range.trim(),stack);
+    return Number.isFinite(n)?String(n):'0';
+  });
+
+  expr=expr.replace(/SUM\s*\(\s*([^()]+?)\s*\)/gi, (m, args)=>{
+    let sum=0;
+    splitArgs(args).forEach(part=>{
+      part=part.trim();
+      if(!part) return;
+      let n=part.includes(':') ? evalRangeSum(part,stack) : evalFormula(part,stack);
+      if(Number.isFinite(n)) sum+=n;
+    });
+    return String(sum);
+  });
+
+  expr=expr.replace(/\$?[A-Z]{1,3}\$?\d+\s*:\s*\$?[A-Z]{1,3}\$?\d+/gi, ref=>{
+    const n=evalRangeSum(ref.replace(/\s/g,''),stack);
+    return Number.isFinite(n)?String(n):'0';
+  });
+
+  expr=expr.replace(/\$?[A-Z]{1,3}\$?\d+/gi, ref=>{
+    const a=parseA1(ref);
+    if(!a) return '0';
+    const n=evalCellValue(a.r,a.c,stack);
+    return Number.isFinite(n)?String(n):(typeof n==='boolean'?(n?'1':'0'):'0');
+  });
+
+  expr=expr.replace(/(\d),(\d)/g,'$1.$2');
+  if(!/^[0-9+\-*/().\sNaN]+$/.test(expr)) return NaN;
+  try{
+    const n=Function('"use strict";return ('+expr+')')();
+    return Number.isFinite(n)?n:NaN;
+  }catch(e){ return NaN; }
+}
+function mergeDocs(existing, added){
+  const out=[];
+  [...(existing||[]), ...(added||[])].forEach(v=>{
+    v=String(v||'').trim();
+    if(v && !out.includes(v)) out.push(v);
+  });
+  return out;
+}
+function existingDocsForRow(rowNum){
+  const row=bMeta.rows.find(r=>r.rowNum===rowNum);
+  if(!row) return [];
+  const cell=row.cells[bMeta.factCol]||{};
+  const val=cell.v!=null?String(cell.v).trim():'';
+  if(!val || val.startsWith('=')) return [];
+  return val.split('|').map(x=>x.trim()).filter(Boolean);
+}
+
+// ═══════════════════════════════════════════
+//  EXTRACTION CARD
+// ═══════════════════════════════════════════
+function renderExt() {
+  advance();
+  if(curIdx>=extRows.length){showDone();return;}
+  const ext=extRows[curIdx];
+  const isCr=ext.solde<0,abs=Math.abs(ext.solde);
+
+  const ae=document.getElementById('eamt');
+  ae.textContent=(isCr?'−':'+')+abs.toLocaleString('fr-BE',{minimumFractionDigits:2})+' €';
+  ae.className='eamt'+(isCr?' cr':'');
+  document.getElementById('eamtlbl').textContent=isCr?'crédit (recette)':'débit (charge)';
+
+  document.getElementById('efields').innerHTML=[
+    ['Libellé',ext.libelle],['Commentaire',ext.commentaire||'—'],
+    ['Nom',ext.nom||'—'],['N°Doc',ext.ndoc||'—'],
+    ['Date',ext.date||'—'],['Période',ext.periode||'—'],['Journal',ext.journal||'—']
+  ].map(([l,v])=>`<div class="efield"><span class="eflbl">${l}</span><span class="efval${l==='N°Doc'?' mono':''}">${v}</span></div>`).join('');
+
+  const total=extRows.length,rem=extRows.filter(e=>!S.processed[e.key]).length;
+  document.getElementById('navLbl').textContent=`${curIdx+1}/${total} · ${rem} restantes`;
+  document.getElementById('navP').disabled=curIdx===0;
+  document.getElementById('navN').disabled=curIdx>=total-1;
+
+  splitMode=false;splitUsed=0;
+  document.getElementById('sz').classList.remove('open');
+  document.getElementById('btnSpl').classList.remove('on');
+  document.getElementById('sinput').value='';
+  updateSplitUI();
+}
+
+// ═══════════════════════════════════════════
+//  ASSIGN
+// ═══════════════════════════════════════════
+function assign(rowNum) {
+  if(curIdx>=extRows.length) return;
+  const ext=extRows[curIdx];
+  const fullAbs=Math.abs(ext.solde),isCr=ext.solde<0;
+  let amount;
+
+  if(splitMode){
+    const v=parseFloat(document.getElementById('sinput').value);
+    if(isNaN(v)||v<=0){toast('Entrez un montant valide.','warn');return;}
+    const avail=fullAbs-splitUsed;
+    if(v>avail+0.005){toast(`Dépasse le disponible (${fmt(avail)} €).`,'warn');return;}
+    amount=v;
+  } else amount=fullAbs;
+
+  const signed=isCr?-amount:amount;
+  if(!S.rowData[rowNum]) S.rowData[rowNum]={parts:[],ndocs:[]};
+  const rd=S.rowData[rowNum];
+  rd.parts.push({signed,abs:amount,isCr});
+  if(ext.ndoc&&!rd.ndocs.includes(ext.ndoc)) rd.ndocs.push(ext.ndoc);
+
+  if(!splitMode){
+    markProc(ext.key,rowNum,amount,ext.ndoc);
+    save();refreshRow(rowNum);
+    toast(`✓ ${fmt(amount)} € → ligne ${rowNum}`,'ok');
+    curIdx++;renderExt();updateProg();
+  } else {
+    splitUsed+=amount;
+    document.getElementById('sinput').value='';
+    updateSplitUI();refreshRow(rowNum);save();
+    const rem=fullAbs-splitUsed;
+    toast(`✓ Split: ${fmt(amount)} € → ligne ${rowNum}. Reste: ${fmt(rem)} €`);
+    if(rem<0.005){
+      markProc(ext.key,rowNum,fullAbs,ext.ndoc);save();
+      curIdx++;splitMode=false;
+      document.getElementById('sz').classList.remove('open');
+      document.getElementById('btnSpl').classList.remove('on');
+      renderExt();updateProg();
+    }
+  }
+}
+
+function markProc(key,rowNum,amount,ndoc){
+  if(!S.processed[key]) S.processed[key]={skipped:false,assignments:[]};
+  S.processed[key].assignments.push({rowNum,amount,ndoc});
+}
+
+function refreshRow(rowNum){
+  // Re-render the full table so formula rows/totals depending on this row are recalculated too.
+  renderBudget();
+  const tr=document.querySelector(`tr[data-rn="${rowNum}"]`);
+  if(!tr) return;
+  tr.classList.add('flash');
+  setTimeout(()=>tr.classList.remove('flash'),700);
+  tr.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ═══════════════════════════════════════════
+//  SKIP / SPLIT / NAV
+// ═══════════════════════════════════════════
+function skipLine(){
+  if(curIdx>=extRows.length)return;
+  const ext=extRows[curIdx];
+  S.processed[ext.key]={skipped:true,assignments:[]};
+  save();curIdx++;renderExt();updateProg();toast('⏩ Ligne passée');
+}
+function toggleSplit(){
+  splitMode=!splitMode;
+  document.getElementById('sz').classList.toggle('open',splitMode);
+  document.getElementById('btnSpl').classList.toggle('on',splitMode);
+  if(splitMode){document.getElementById('sinput').focus();updateSplitUI();}
+}
+function onSplit(){updateSplitUI();}
+function updateSplitUI(){
+  if(curIdx>=extRows.length)return;
+  const full=Math.abs(extRows[curIdx].solde),avail=full-splitUsed;
+  const inp=parseFloat(document.getElementById('sinput').value)||0;
+  const after=avail-inp;
+  const el=document.getElementById('srem');
+  el.textContent=fmt(after)+' €';
+  el.className='sv'+(after<-0.005?' over':after<0.005?' done':'');
+  document.getElementById('salready').textContent=splitUsed>0?`Déjà affecté : ${fmt(splitUsed)} €  ·  Disponible : ${fmt(avail)} €`:'';
+}
+function navExt(d){const ni=curIdx+d;if(ni<0||ni>=extRows.length)return;curIdx=ni;renderExt();}
+
+// ═══════════════════════════════════════════
+//  PROGRESS
+// ═══════════════════════════════════════════
+function updateProg(){
+  const total=extRows.length,done=Object.keys(S.processed).length;
+  const pct=total>0?Math.round(done/total*100):0;
+  document.getElementById('progLbl').textContent=`${done} / ${total} lignes traitées`;
+  document.getElementById('progF').style.width=pct+'%';
+  document.getElementById('progPct').textContent=pct+'%';
+}
+
+// ═══════════════════════════════════════════
+//  EXPORT via Pyodide + openpyxl
+// ═══════════════════════════════════════════
+let pyodide = null;
+let pyodideReadyPromise = null;
+
+async function loadPyodide() {
+  // Une seule promesse partagée : les deux boutons attendent exactement le même chargement.
+  if (pyodide) return pyodide;
+  if (pyodideReadyPromise) return pyodideReadyPromise;
+
+  pyodideReadyPromise = (async () => {
+    if (!window.loadPyodide) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+        s.onload = res;
+        s.onerror = () => rej(new Error('Impossible de charger Pyodide. Vérifiez la connexion internet.'));
+        document.head.appendChild(s);
+      });
+    }
+
+    const py = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
+    await py.loadPackage('micropip');
+
+    await py.runPythonAsync(`
+import micropip
+await micropip.install(['openpyxl', 'pillow'], keep_going=True)
+import openpyxl
+try:
+    import PIL
+except Exception:
+    pass
+print('openpyxl ready')
+    `);
+
+    pyodide = py;
+    return pyodide;
+  })();
+
+  try {
+    return await pyodideReadyPromise;
+  } catch (e) {
+    pyodideReadyPromise = null;
+    pyodide = null;
+    throw e;
+  }
+}
+
+const PY_EXPORT = `
+import openpyxl, copy, io, json, base64
+from openpyxl.drawing.image import Image as XLImage
+
+def run(excel_b64, assignments_json, logo_b64=None):
+    excel_bytes = base64.b64decode(excel_b64)
+    asgn = json.loads(assignments_json)
+    row_data = asgn['rowData']
+    anal_col = asgn['analCol'] + 1   # openpyxl 1-based
+    fact_col = asgn['factCol'] + 1
+    header_row = asgn['headerRow'] + 1
+
+    buf = io.BytesIO(excel_bytes)
+    wb = openpyxl.load_workbook(buf)
+    ws = wb.active
+
+    # Logo : si un fichier logo.png est trouvé à côté de l'outil HTML,
+    # l'insérer en haut à gauche du fichier Excel sans bloquer l'export si absent.
+    if logo_b64:
+        try:
+            logo_bytes = base64.b64decode(logo_b64)
+            logo_img = XLImage(io.BytesIO(logo_bytes))
+            logo_img.width = 118
+            logo_img.height = 81
+            ws.add_image(logo_img, 'A1')
+        except Exception as e:
+            print('Logo non inséré:', e)
+
+    def cp_style(src, dst):
+        if src.has_style:
+            dst.font      = copy.copy(src.font)
+            dst.fill      = copy.copy(src.fill)
+            dst.border    = copy.copy(src.border)
+            dst.alignment = copy.copy(src.alignment)
+            dst.number_format = src.number_format
+
+    def unique_keep_order(values):
+        out = []
+        seen = set()
+        for v in values:
+            v = str(v or '').strip()
+            if v and v not in seen:
+                seen.add(v)
+                out.append(v)
+        return out
+
+    def split_ndocs(value):
+        if value is None:
+            return []
+        txt = str(value).strip()
+        # Ne jamais traiter une formule comme une liste de factures.
+        if not txt or txt.startswith('='):
+            return []
+        return [x.strip() for x in txt.split('|') if x.strip()]
+
+    def existing_formula_part(value):
+        # Préserve ce qui existe déjà dans Analytique : nombre, formule ou nombre stocké en texte.
+        if value is None or value == '':
+            return None
+        if isinstance(value, (int, float)):
+            if abs(value) < 0.0000001:
+                return None
+            return f'{float(value):.2f}'
+
+        txt = str(value).strip()
+        if not txt:
+            return None
+        if txt.startswith('='):
+            return '(' + txt[1:] + ')'
+
+        # Convertit prudemment les nombres texte FR/BE : 1.234,56 ou 1234,56
+        cleaned = txt.replace('€', '').replace(' ', '').replace('\\u00a0', '')
+        if ',' in cleaned and '.' in cleaned:
+            cleaned = cleaned.replace('.', '').replace(',', '.')
+        elif ',' in cleaned:
+            cleaned = cleaned.replace(',', '.')
+        try:
+            num = float(cleaned)
+            if abs(num) < 0.0000001:
+                return None
+            return f'{num:.2f}'
+        except Exception:
+            # Valeur texte non numérique : on la laisse intacte, sans l'écraser.
+            return None
+
+    # Add N° Factures header wherever col (fact_col-1) has a label
+    for r in range(1, ws.max_row + 1):
+        src = ws.cell(row=r, column=fact_col - 1)
+        if not src.value:
+            continue
+        sv = str(src.value).strip()
+        # Header rows: has 'Commentaire' or mirrors it with a formula
+        if 'commentaire' in sv.lower() or sv == '=M17' or sv.startswith('=M'):
+            dst = ws.cell(row=r, column=fact_col)
+            # IMPORTANT : ne pas écraser une cellule N qui contient déjà des N°Doc.
+            if dst.value and r != header_row:
+                continue
+            if sv.startswith('='):
+                fact_col_letter = openpyxl.utils.get_column_letter(fact_col)
+                ref_row = src.value[2:]  # e.g. '17' from '=M17'
+                dst.value = f'={fact_col_letter}{ref_row}'
+            else:
+                dst.value = 'N° Factures'
+            cp_style(src, dst)
+
+    # Explicit header at the detected header row
+    nh = ws.cell(row=header_row, column=fact_col)
+    mh = ws.cell(row=header_row, column=fact_col - 1)
+    nh.value = 'N° Factures'
+    cp_style(mh, nh)
+
+    # Column width
+    cl = openpyxl.utils.get_column_letter(fact_col)
+    ws.column_dimensions[cl].width = 30
+
+    # Apply row data
+    for rn_str, rd in row_data.items():
+        rn = int(rn_str)
+        parts = rd.get('parts', [])
+        ndocs = rd.get('ndocs', [])
+
+        # Analytique cell : conserver l'existant, puis ajouter les nouveaux montants.
+        ic = ws.cell(row=rn, column=anal_col)
+        existing_part = existing_formula_part(ic.value)
+
+        fp = []
+        if existing_part:
+            fp.append(existing_part)
+        for p in parts:
+            amt = float(p.get('abs', 0) or 0)
+            if amt == 0:
+                continue
+            fp.append(f'{amt:.2f}' + ('*-1' if p.get('isCr') else ''))
+
+        if fp:
+            ic.value = '=' + '+'.join(fp)
+        if not ic.number_format or ic.number_format == 'General':
+            ic.number_format = '#,##0.00\\ "€"'
+
+        # Factures cell : fusionner l'existant et les nouveaux N°Doc, sans écraser.
+        nc = ws.cell(row=rn, column=fact_col)
+        mc = ws.cell(row=rn, column=fact_col - 1)
+
+        existing_value = nc.value
+        existing_ndocs = split_ndocs(existing_value)
+        all_ndocs = unique_keep_order(existing_ndocs + ndocs)
+
+        if all_ndocs:
+            nc.value = ' | '.join(all_ndocs)
+        elif existing_value is not None:
+            nc.value = existing_value
+        cp_style(mc, nc)
+
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return base64.b64encode(out.read()).decode()
+
+result = run(excel_b64, assignments_json, logo_b64)
+result
+`;
+
+
+let cachedLogoB64 = null;
+
+async function loadLogoPngBase64() {
+  if (cachedLogoB64 !== null) return cachedLogoB64;
+  // 1) Priorité : logo.png placé à côté du fichier HTML.
+  // Note : certains navigateurs bloquent fetch('logo.png') quand l'outil est ouvert en file://.
+  try {
+    const response = await fetch('logo.png', { cache: 'no-store' });
+    if (response.ok) {
+      const blob = await response.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => { cachedLogoB64 = String(reader.result).split(',')[1] || ''; resolve(cachedLogoB64); };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch(e) {
+    console.warn('logo.png introuvable ou inaccessible depuis ce navigateur', e);
+  }
+
+  // 2) Secours : logo chargé via le bouton + Logo du bandeau.
+  try {
+    const savedLogo = localStorage.getItem('hdr_logo') || '';
+    if (savedLogo.startsWith('data:image/')) { cachedLogoB64 = savedLogo.split(',')[1] || ''; return cachedLogoB64; }
+  } catch(e) {}
+
+  cachedLogoB64 = '';
+  return '';
+}
+
+async function exportExcel() {
+  if (!budgetBytes) { toast('Aucun fichier budget chargé.','warn'); return; }
+  // Même sans nouvelle affectation, on autorise l'export :
+  // utile pour télécharger le budget déjà chargé, préserver les N°Docs/formules existants,
+  // et insérer le logo/titre dans le fichier final.
+
+  // Disable buttons
+  ['btnExp','btnDl'].forEach(id=>{ const el=document.getElementById(id); if(el){el.disabled=true;el.textContent='⏳ En cours…';} });
+  document.getElementById('overlay').classList.add('v');
+
+  try {
+    const ovMsg = document.getElementById('overlayMsg');
+    ovMsg.innerHTML = 'Chargement de Python dans le navigateur…<br><em>(une seule fois, ~15 secondes)</em>';
+
+    const py = await loadPyodide();
+    if (!py) throw new Error('Pyodide n’est pas prêt. Relancez l’export.');
+    ovMsg.innerHTML = 'Génération du fichier Excel…';
+
+    // Chunked base64 encoding to avoid call stack overflow on large files
+    function uint8ToBase64(bytes) {
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+      }
+      return btoa(binary);
+    }
+    const b64 = uint8ToBase64(budgetBytes);
+
+    const assignmentsJson = JSON.stringify({
+      rowData: S.rowData,
+      analCol: bMeta.analCol,
+      factCol: bMeta.factCol,
+      headerRow: bMeta.headerRow
+    });
+
+    ovMsg.innerHTML = 'Recherche de logo.png puis génération du fichier Excel…';
+    const logoB64 = await loadLogoPngBase64();
+
+    // Run Python
+    py.globals.set('excel_b64', b64);
+    py.globals.set('assignments_json', assignmentsJson);
+    py.globals.set('logo_b64', logoB64);
+    const resultB64 = await py.runPythonAsync(PY_EXPORT);
+
+    // Download
+    const binStr = atob(resultB64);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i=0;i<binStr.length;i++) bytes[i]=binStr.charCodeAt(i);
+    const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url; a.download=`budget_analytique_${new Date().toISOString().slice(0,10)}.xlsx`;
+    a.click(); URL.revokeObjectURL(url);
+    toast('✓ Fichier Excel exporté !','ok');
+
+  } catch(err) {
+    console.error(err);
+    toast('Erreur lors de l\'export : '+err.message,'warn');
+  } finally {
+    ['btnExp','btnDl'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el){el.disabled=false;el.textContent=id==='btnExp'?'⬇ Exporter Excel':'⬇ Télécharger le budget mis à jour';}
+    });
+    document.getElementById('overlay').classList.remove('v');
+  }
+}
+
+// ═══════════════════════════════════════════
+//  DONE
+// ═══════════════════════════════════════════
+function showDone() {
+  show('sd');
+  const skipped=extRows.filter(e=>S.processed[e.key]?.skipped);
+  const box=document.getElementById('skipbox');
+  if(skipped.length>0){
+    box.style.display='block';
+    document.getElementById('skipitems').innerHTML=skipped.map(e=>`
+      <div class="ski">
+        <div class="ski-d"><div class="m">${e.libelle||'—'}</div><div class="s">${e.commentaire||''}</div></div>
+        <span class="ski-ndoc">${e.ndoc}</span>
+        <span class="ski-amt">${fmt(Math.abs(e.solde))} €</span>
+      </div>`).join('');
+  } else box.style.display='none';
+}
+
+// ═══════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════
+function show(id){
+  ['su','sm','sd'].forEach(s=>{
+    const el=document.getElementById(s);
+    if(s===id){
+      if(s==='sm') { el.style.display='grid'; }
+      else { el.style.display='flex'; el.style.flexDirection='column'; el.style.alignItems='center'; el.style.justifyContent='center'; }
+    } else {
+      el.style.display='none';
+    }
+  });
+}
+
+let tT;
+function toast(msg,type){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className='toast v'+(type==='ok'?' ok':'');
+  clearTimeout(tT);tT=setTimeout(()=>el.classList.remove('v'),3400);
+}
+</script>
+</body>
+</html>
