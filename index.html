@@ -116,13 +116,18 @@
 
   table.bt{width:100%;border-collapse:collapse;font-size:11px}
   table.bt thead{position:sticky;top:0;z-index:10}
-  table.bt th{background:#1A1916;color:#fff;padding:7px 9px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;border-right:1px solid rgba(255,255,255,.07);font-weight:500}
+  table.bt th{background:#1A1916;color:#fff;padding:7px 9px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;border-right:1px solid rgba(255,255,255,.07);font-weight:500;cursor:pointer;user-select:none}
+  table.bt th:hover{background:#333}
+  table.bt th.col-hidden, table.bt td.col-hidden{width:18px!important;min-width:18px!important;max-width:18px!important;padding-left:3px!important;padding-right:3px!important;overflow:hidden!important;color:transparent!important;white-space:nowrap!important}
+  table.bt th.col-hidden::after{content:'↔';color:#fff;font-size:10px}
+  table.bt td.col-hidden *{display:none!important}
   table.bt td{padding:5px 9px;border-bottom:1px solid var(--border);border-right:1px solid #EBEBEB;white-space:nowrap}
   table.bt td.lc{white-space:normal;min-width:160px;max-width:250px}
   table.bt td.nc{font-family:'DM Mono',monospace;text-align:right}
   table.bt td.ac{font-family:'DM Mono',monospace;text-align:right;font-weight:600;color:var(--warn)}
   table.bt td.ac.ok{background:#FFF8F0;color:var(--warn)}
   table.bt td.fc{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);max-width:160px;white-space:normal;word-break:break-all;line-height:1.5}
+  table.bt td.formula-warn{background:#FFE6E6!important;color:#9B1C1C!important;font-weight:700}
 
   tr.rh td{background:#D4EAF3;font-weight:700;font-size:11px}
   tr.rs td{background:#CEDBE6;font-weight:700}
@@ -292,6 +297,7 @@ let splitUsed = 0;
 
 // Session persisted to localStorage
 let S = { processed:{}, rowData:{}, curIdx:0 };
+let hiddenCols = new Set();
 
 // ═══════════════════════════════════════════
 //  INIT
@@ -530,7 +536,11 @@ function renderBudget() {
   const tr=document.createElement('tr');
   for(let c=0;c<maxC;c++){
     const th=document.createElement('th');
+    th.dataset.col=c;
+    th.title='Cliquer pour réduire/afficher cette colonne';
     th.textContent=c===fC?'N° Factures':(hCells[c]?String(hCells[c].v||''):'');
+    if(hiddenCols.has(c)) th.classList.add('col-hidden');
+    th.addEventListener('click',()=>toggleColumn(c));
     tr.appendChild(th);
   }
   hd.innerHTML='';hd.appendChild(tr);
@@ -546,6 +556,7 @@ function renderBudget() {
 
     row.cells.forEach((cell,ci)=>{
       const td=document.createElement('td');
+      if(hiddenCols.has(ci)) td.classList.add('col-hidden');
       const isA=ci===aC,isF=ci===fC;
       if(ci===0) td.classList.add('lc');
       else if(isA) td.classList.add('ac');
@@ -556,26 +567,253 @@ function renderBudget() {
         td.textContent=rd?mergeDocs(existingDocsForRow(row.rowNum), rd.ndocs).join(' | '):(cell.v!=null?String(cell.v||''):'');
       } else if(isA) {
         if(rd){
-          const add=rd.parts.reduce((s,p)=>s+p.signed,0);
-          if(typeof cell.v==='number') td.textContent=fmt(cell.v+add);
-          else if(cell.f) td.textContent='='+cell.f+' + '+fmt(add);
-          else if(typeof cell.v==='string' && cell.v.trim().startsWith('=')) td.textContent=cell.v+' + '+fmt(add);
-          else td.textContent=fmt(add);
+          const n=evalCellValue(row.rowIdx, ci);
+          td.textContent=isDisplayValue(n)?fmtDisplayValue(n):fmt(rd.parts.reduce((s,p)=>s+p.signed,0));
           td.classList.add('ok');
-        } else td.textContent=cell.v!=null?fmtCell(cell):'';
-      } else td.textContent=cell.v!=null?fmtCell(cell):'';
+        } else {
+          td.textContent=(cell.v!=null||cell.f)?fmtCell(cell,row.rowIdx,ci):'';
+          markUnsupportedFormula(td, cell, row.rowIdx, ci);
+        }
+      } else {
+        td.textContent=(cell.v!=null||cell.f)?fmtCell(cell,row.rowIdx,ci):'';
+        markUnsupportedFormula(td, cell, row.rowIdx, ci);
+      }
       tr.appendChild(td);
     });
     bd.appendChild(tr);
   });
 }
 
-function fmtCell(c) {
-  if(c.v===null||c.v===undefined) return '';
+
+function toggleColumn(colIdx){
+  if(hiddenCols.has(colIdx)) hiddenCols.delete(colIdx);
+  else hiddenCols.add(colIdx);
+  renderBudget();
+}
+
+function fmtCell(c, rowIdx=null, colIdx=null) {
+  if(!c || (c.v===null||c.v===undefined) && !c.f) return '';
+
+  // If the cell contains an Excel formula, show its calculated value in the tool.
+  // xlsx.js reads formulas but does not recalculate them, so we evaluate the
+  // formulas used in the budget view ourselves: =X+Y, SOMME/SUM, SOUS.TOTAL(9;...), SUMIF and EXACT.
+  const hasFormula = !!c.f || (typeof c.v==='string' && c.v.trim().startsWith('='));
+  if(hasFormula && rowIdx!==null && colIdx!==null){
+    const n = evalCellValue(rowIdx, colIdx);
+    if(isDisplayValue(n)) return fmtDisplayValue(n);
+    const formulaText = String(c.f || c.v).replace(/^=/,'');
+    if(/\bSUMIF\s*\(/i.test(formulaText)) return 'SUMIF';
+    return '=' + formulaText;
+  }
+
   if(typeof c.v==='number'){if(c.v===0)return '0';return c.v.toLocaleString('fr-BE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+  if(typeof c.v==='boolean') return c.v ? 'VRAI' : 'FAUX';
   return String(c.v);
 }
+function isDisplayValue(v){return Number.isFinite(v) || typeof v === 'boolean' || typeof v === 'string';}
+function fmtDisplayValue(v){
+  if(typeof v==='boolean') return v ? 'VRAI' : 'FAUX';
+  if(typeof v==='string') return v;
+  return fmt(v);
+}
 function fmt(n){n=parseFloat(n)||0;if(n===0)return '0';return n.toLocaleString('fr-BE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function rawFormula(c){return c ? String(c.f || (typeof c.v==='string'?c.v:'')) : '';}
+function markUnsupportedFormula(td, c, rowIdx, colIdx){
+  const f=rawFormula(c).replace(/^=/,'').trim();
+  if(!f) return;
+  const n=evalCellValue(rowIdx,colIdx);
+  if(!isDisplayValue(n) && /\bSUMIF\s*\(/i.test(f)) {
+    td.classList.add('formula-warn');
+    td.title = '=' + f;
+  }
+}
+
+function cellObj(rowIdx, colIdx){
+  const row=bMeta.rows.find(r=>r.rowIdx===rowIdx);
+  return row ? (row.cells[colIdx]||{}) : {};
+}
+function colLettersToIndex(letters){
+  let n=0;
+  String(letters||'').toUpperCase().split('').forEach(ch=>{ n=n*26+(ch.charCodeAt(0)-64); });
+  return n-1;
+}
+function parseA1(ref){
+  const m=String(ref||'').replace(/\$/g,'').match(/^([A-Z]+)(\d+)$/i);
+  if(!m) return null;
+  return { c:colLettersToIndex(m[1]), r:parseInt(m[2],10)-1 };
+}
+function parseLooseNumber(v){
+  if(v===null||v===undefined||v==='') return NaN;
+  if(typeof v==='number') return v;
+  let s=String(v).trim();
+  if(!s || s.startsWith('=')) return NaN;
+  s=s.replace(/\s/g,'').replace(/€/g,'');
+  if(s.includes(',')) s=s.replace(/\./g,'').replace(',', '.');
+  const n=parseFloat(s);
+  return Number.isFinite(n)?n:NaN;
+}
+function evalRangeSum(rangeRef, stack){
+  const parts=String(rangeRef||'').split(':');
+  const a=parseA1(parts[0]), b=parseA1(parts[1]||parts[0]);
+  if(!a||!b) return NaN;
+  let sum=0;
+  const r1=Math.min(a.r,b.r), r2=Math.max(a.r,b.r), c1=Math.min(a.c,b.c), c2=Math.max(a.c,b.c);
+  for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++){
+    const v=evalCellValue(r,c,stack);
+    if(Number.isFinite(v)) sum+=v;
+  }
+  return sum;
+}
+function evalCellValue(rowIdx, colIdx, stack=new Set()){
+  const key=rowIdx+':'+colIdx;
+  if(stack.has(key)) return NaN;
+  stack.add(key);
+
+  const c=cellObj(rowIdx,colIdx);
+  const formula = c.f ? String(c.f) : (typeof c.v==='string' && c.v.trim().startsWith('=') ? c.v.trim().slice(1) : '');
+  let val;
+  if(formula) val=evalFormula(formula,stack);
+  else val=parseLooseNumber(c.v);
+
+  const rowNum=rowIdx+1;
+  if(colIdx===bMeta.analCol && S.rowData[rowNum]){
+    const add=S.rowData[rowNum].parts.reduce((s,p)=>s+p.signed,0);
+    val=(Number.isFinite(val)?val:0)+add;
+  }
+
+  stack.delete(key);
+  return val;
+}
+function splitArgs(args){
+  const out=[]; let cur='', depth=0, quote=null;
+  for(const ch of String(args||'')){
+    if(quote){ cur+=ch; if(ch===quote) quote=null; continue; }
+    if(ch==='"' || ch==="'"){ quote=ch; cur+=ch; continue; }
+    if(ch==='('){ depth++; cur+=ch; continue; }
+    if(ch===')'){ depth--; cur+=ch; continue; }
+    if((ch===',' || ch===';') && depth===0){ out.push(cur.trim()); cur=''; continue; }
+    cur+=ch;
+  }
+  if(cur.trim() || args==='') out.push(cur.trim());
+  return out;
+}
+function stripQuotes(s){
+  s=String(s??'').trim();
+  if((s.startsWith('"')&&s.endsWith('"')) || (s.startsWith("'")&&s.endsWith("'"))) return s.slice(1,-1);
+  return s;
+}
+function cellRef(r,c){
+  let n=c+1, letters='';
+  while(n>0){ const rem=(n-1)%26; letters=String.fromCharCode(65+rem)+letters; n=Math.floor((n-1)/26); }
+  return letters+(r+1);
+}
+function evalTextValue(token, stack){
+  token=String(token??'').trim();
+  if(!token) return '';
+  const quoted=stripQuotes(token);
+  if(quoted!==token) return quoted;
+  const a=parseA1(token.replace(/\$/g,''));
+  if(a){
+    const c=cellObj(a.r,a.c);
+    const v=evalCellValue(a.r,a.c,stack);
+    if(Number.isFinite(v) || typeof v==='boolean') return v;
+    return c.v==null ? '' : String(c.v);
+  }
+  const n=parseLooseNumber(token);
+  return Number.isFinite(n)?n:token;
+}
+function criteriaMatches(value, criteriaRaw, stack){
+  let crit=evalTextValue(criteriaRaw, stack);
+  if(typeof crit==='boolean') return Boolean(value)===crit;
+  crit=stripQuotes(String(crit??'').trim());
+  const m=crit.match(/^(>=|<=|<>|>|<|=)(.*)$/);
+  const op=m?m[1]:'=';
+  let rhs=stripQuotes((m?m[2]:crit).trim());
+  const vn=parseLooseNumber(value), rn=parseLooseNumber(rhs);
+  if(Number.isFinite(vn) && Number.isFinite(rn)){
+    if(op==='>') return vn>rn; if(op==='<') return vn<rn; if(op==='>=') return vn>=rn; if(op==='<=') return vn<=rn; if(op==='<>') return vn!==rn; return vn===rn;
+  }
+  const vs=String(value??''), rs=String(rhs??'');
+  if(op==='<>') return vs!==rs;
+  if(op==='=') return vs===rs;
+  return false;
+}
+function evalSumIf(argsText, stack){
+  const args=splitArgs(argsText);
+  if(args.length<2) return NaN;
+  const criteriaRange=args[0], criteria=args[1], sumRange=args[2] || args[0];
+  const crParts=String(criteriaRange).split(':'), srParts=String(sumRange).split(':');
+  const ca=parseA1(crParts[0]), cb=parseA1(crParts[1]||crParts[0]);
+  const sa=parseA1(srParts[0]), sb=parseA1(srParts[1]||srParts[0]);
+  if(!ca||!cb||!sa||!sb) return NaN;
+  const rows=Math.abs(cb.r-ca.r)+1, cols=Math.abs(cb.c-ca.c)+1;
+  const srRows=Math.abs(sb.r-sa.r)+1, srCols=Math.abs(sb.c-sa.c)+1;
+  let sum=0;
+  for(let i=0;i<rows;i++) for(let j=0;j<cols;j++){
+    const cr=ca.r + (ca.r<=cb.r?i:-i), cc=ca.c + (ca.c<=cb.c?j:-j);
+    const rr=sa.r + (sa.r<=sb.r?Math.min(i,srRows-1):-Math.min(i,srRows-1));
+    const sc=sa.c + (sa.c<=sb.c?Math.min(j,srCols-1):-Math.min(j,srCols-1));
+    const cv=evalTextValue(cellRef(cr,cc),stack);
+    if(criteriaMatches(cv, criteria, stack)){
+      const n=evalCellValue(rr,sc,stack);
+      if(Number.isFinite(n)) sum+=n;
+    }
+  }
+  return sum;
+}
+function evalExact(argsText, stack){
+  const args=splitArgs(argsText);
+  if(args.length<2) return NaN;
+  return String(evalTextValue(args[0],stack)) === String(evalTextValue(args[1],stack));
+}
+function evalFormula(formula, stack){
+  let expr=String(formula||'').replace(/^=/,'').trim();
+  if(!expr) return NaN;
+  expr=expr.replace(/SOUS\.TOTAL/gi,'SUBTOTAL').replace(/SOMME/gi,'SUM');
+
+  const exactOnly=expr.match(/^EXACT\s*\((.*)\)$/i);
+  if(exactOnly) return evalExact(exactOnly[1], stack);
+
+  expr=expr.replace(/SUMIF\s*\(([^()]*)\)/gi, (m, args)=>{
+    const n=evalSumIf(args,stack);
+    return Number.isFinite(n)?String(n):'NaN';
+  });
+
+  expr=expr.replace(/SUBTOTAL\s*\(\s*9\s*[,;]\s*([^()]+?)\s*\)/gi, (m, range)=>{
+    const n=evalRangeSum(range.trim(),stack);
+    return Number.isFinite(n)?String(n):'0';
+  });
+
+  expr=expr.replace(/SUM\s*\(\s*([^()]+?)\s*\)/gi, (m, args)=>{
+    let sum=0;
+    splitArgs(args).forEach(part=>{
+      part=part.trim();
+      if(!part) return;
+      let n=part.includes(':') ? evalRangeSum(part,stack) : evalFormula(part,stack);
+      if(Number.isFinite(n)) sum+=n;
+    });
+    return String(sum);
+  });
+
+  expr=expr.replace(/\$?[A-Z]{1,3}\$?\d+\s*:\s*\$?[A-Z]{1,3}\$?\d+/gi, ref=>{
+    const n=evalRangeSum(ref.replace(/\s/g,''),stack);
+    return Number.isFinite(n)?String(n):'0';
+  });
+
+  expr=expr.replace(/\$?[A-Z]{1,3}\$?\d+/gi, ref=>{
+    const a=parseA1(ref);
+    if(!a) return '0';
+    const n=evalCellValue(a.r,a.c,stack);
+    return Number.isFinite(n)?String(n):(typeof n==='boolean'?(n?'1':'0'):'0');
+  });
+
+  expr=expr.replace(/(\d),(\d)/g,'$1.$2');
+  if(!/^[0-9+\-*/().\sNaN]+$/.test(expr)) return NaN;
+  try{
+    const n=Function('"use strict";return ('+expr+')')();
+    return Number.isFinite(n)?n:NaN;
+  }catch(e){ return NaN; }
+}
 function mergeDocs(existing, added){
   const out=[];
   [...(existing||[]), ...(added||[])].forEach(v=>{
@@ -675,17 +913,10 @@ function markProc(key,rowNum,amount,ndoc){
 }
 
 function refreshRow(rowNum){
+  // Re-render the full table so formula rows/totals depending on this row are recalculated too.
+  renderBudget();
   const tr=document.querySelector(`tr[data-rn="${rowNum}"]`);
   if(!tr) return;
-  const rd=S.rowData[rowNum];if(!rd)return;
-  tr.classList.add('asgn');
-  const row=bMeta.rows.find(r=>r.rowNum===rowNum);
-  const base=row?(typeof row.cells[bMeta.analCol]?.v==='number'?row.cells[bMeta.analCol].v:0):0;
-  const total=base+rd.parts.reduce((s,p)=>s+p.signed,0);
-  const ac=tr.cells[bMeta.analCol];
-  if(ac){ac.textContent=fmt(total);ac.classList.add('ok');}
-  const fc=tr.cells[bMeta.factCol];
-  if(fc) fc.textContent=mergeDocs(existingDocsForRow(rowNum), rd.ndocs).join(' | ');
   tr.classList.add('flash');
   setTimeout(()=>tr.classList.remove('flash'),700);
   tr.scrollIntoView({behavior:'smooth',block:'nearest'});
