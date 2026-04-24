@@ -3,726 +3,318 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Budget Analytique — Outil de mise à jour</title>
+<title>Analytique ↔ Budget</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
 
   :root {
-    --bg: #F5F4F0;
-    --surface: #FFFFFF;
-    --surface2: #FAFAF8;
-    --border: #E2E0D8;
-    --border-strong: #C8C5BB;
-    --text: #1A1916;
-    --text-muted: #7A7770;
-    --text-light: #ABA8A0;
-    --accent: #2D5A27;
-    --accent-light: #EBF4E9;
-    --accent-mid: #5A9651;
-    --warn: #8B4513;
-    --warn-light: #FDF3EC;
-    --skip: #5A5650;
-    --skip-light: #F0EFED;
-    --split: #1A4A8B;
-    --split-light: #EBF0FA;
-    --row-clickable: #FFFFFF;
-    --row-hover: #F0F7EE;
-    --row-selected: #DDF0D8;
-    --row-section: #CEDBE6;
-    --row-header: #D4EAF3;
-    --highlight: #FFE066;
+    --bg: #F5F4F0; --surface: #FFFFFF; --border: #E2E0D8; --border-strong: #C8C5BB;
+    --text: #1A1916; --text-muted: #7A7770;
+    --accent: #2D5A27; --accent-light: #EBF4E9;
+    --warn: #8B3A0F; --warn-light: #FDF3EC;
+    --skip-light: #F0EFED; --skip: #5A5650;
+    --split: #1A4A8B; --split-light: #EBF0FA;
+    --row-hover: #EEF7EC; --row-assigned: #EAF6E6;
+    --flash: #FFF176;
     --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.1), 0 8px 32px rgba(0,0,0,0.06);
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
 
-  body {
-    font-family: 'DM Sans', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    font-size: 14px;
-  }
-
-  /* ── HEADER ── */
   .app-header {
-    background: var(--text);
-    color: #fff;
-    padding: 16px 32px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    position: sticky;
-    top: 0;
-    z-index: 100;
+    background: #1A1916; color: #fff; padding: 14px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
   }
-  .app-header h1 {
-    font-size: 15px;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    font-family: 'DM Mono', monospace;
-  }
-  .app-header .subtitle {
-    font-size: 12px;
-    color: #AAA;
-    font-family: 'DM Mono', monospace;
-  }
-  .session-badge {
-    font-size: 11px;
-    font-family: 'DM Mono', monospace;
-    background: rgba(255,255,255,0.1);
-    padding: 4px 10px;
-    border-radius: 20px;
-    color: #CCC;
-  }
+  .app-header h1 { font-size: 14px; font-weight: 600; font-family: 'DM Mono', monospace; letter-spacing: 0.04em; }
+  .app-header .sub { font-size: 11px; color: #888; font-family: 'DM Mono', monospace; margin-top: 2px; }
+  #sessionBadge { font-size: 11px; font-family: 'DM Mono', monospace; color: #AAA; }
 
-  /* ── LAYOUT ── */
-  .app-body {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0;
-    max-width: 1600px;
-    margin: 0 auto;
-    padding: 24px;
-  }
+  .screen { display: none; }
 
-  /* ── UPLOAD SCREEN ── */
-  #screen-upload {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 80vh;
-    gap: 32px;
-  }
-  .upload-title {
-    font-family: 'DM Mono', monospace;
-    font-size: 28px;
-    font-weight: 500;
-    text-align: center;
-    line-height: 1.3;
-  }
+  /* ── UPLOAD ── */
+  #screen-upload { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 85vh; gap: 28px; padding: 40px; }
+  .upload-title { font-family: 'DM Mono', monospace; font-size: 22px; text-align: center; line-height: 1.5; }
   .upload-title span { color: var(--accent); }
-  .upload-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 20px;
-    width: 100%;
-    max-width: 680px;
-  }
-  .upload-card {
-    background: var(--surface);
-    border: 2px dashed var(--border-strong);
-    border-radius: 12px;
-    padding: 32px 24px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    position: relative;
-  }
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; width: 100%; max-width: 620px; }
+  .upload-card { background: var(--surface); border: 2px dashed var(--border-strong); border-radius: 12px; padding: 28px 20px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; }
   .upload-card:hover { border-color: var(--accent); background: var(--accent-light); }
   .upload-card.loaded { border-style: solid; border-color: var(--accent); background: var(--accent-light); }
-  .upload-card input[type=file] {
-    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
-  }
-  .upload-icon { font-size: 36px; margin-bottom: 12px; }
-  .upload-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-  .upload-card p { font-size: 12px; color: var(--text-muted); }
-  .upload-card .file-name {
-    margin-top: 10px; font-size: 11px; font-family: 'DM Mono', monospace;
-    color: var(--accent); font-weight: 500; word-break: break-all;
-  }
-  .btn-start {
-    background: var(--accent);
-    color: white;
-    border: none;
-    padding: 14px 40px;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    transition: background 0.2s, transform 0.1s;
-    display: none;
-  }
-  .btn-start:hover { background: #234820; transform: translateY(-1px); }
-  .btn-start.visible { display: inline-flex; align-items: center; gap: 8px; }
-  .session-info {
-    font-size: 12px; color: var(--text-muted);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 16px;
-    max-width: 680px;
-    width: 100%;
-    text-align: center;
-    font-family: 'DM Mono', monospace;
-  }
+  .upload-card input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-card .icon { font-size: 30px; margin-bottom: 10px; }
+  .upload-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .upload-card p { font-size: 11px; color: var(--text-muted); }
+  .upload-card .fname { margin-top: 8px; font-size: 11px; font-family: 'DM Mono', monospace; color: var(--accent); font-weight: 500; word-break: break-all; }
+  .session-note { font-size: 12px; color: var(--text-muted); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 18px; font-family: 'DM Mono', monospace; text-align: center; max-width: 620px; width: 100%; }
+  #btn-start { display: none; background: var(--accent); color: white; border: none; padding: 13px 36px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  #btn-start:hover { background: #234820; }
+  #btn-start.show { display: inline-block; }
 
-  /* ── MAIN SCREEN ── */
-  #screen-main { display: none; }
-  #screen-main.active { display: grid; grid-template-rows: auto 1fr; gap: 20px; }
-
-  /* progress bar */
-  .progress-bar-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 24px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-  }
-  .progress-bar-track {
-    flex: 1;
-    height: 6px;
-    background: var(--border);
-    border-radius: 10px;
-    overflow: hidden;
-  }
-  .progress-bar-fill {
-    height: 100%;
-    background: var(--accent);
-    border-radius: 10px;
-    transition: width 0.4s ease;
-  }
-  .progress-text {
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    color: var(--text-muted);
-    white-space: nowrap;
-  }
-  .btn-export {
-    background: var(--text);
-    color: #fff;
-    border: none;
-    padding: 8px 18px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    transition: background 0.2s;
-  }
+  /* ── MAIN ── */
+  #screen-main { padding: 20px; display: grid; grid-template-rows: auto 1fr; gap: 16px; }
+  .prog-bar-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 20px; display: flex; align-items: center; gap: 16px; }
+  #prog-label { font-size: 12px; font-family: 'DM Mono', monospace; white-space: nowrap; min-width: 150px; }
+  .prog-track { flex: 1; height: 5px; background: var(--border); border-radius: 10px; overflow: hidden; }
+  .prog-fill { height: 100%; background: var(--accent); border-radius: 10px; transition: width 0.4s; }
+  #prog-pct { font-size: 12px; font-family: 'DM Mono', monospace; color: var(--text-muted); }
+  .btn-export { background: #1A1916; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; white-space: nowrap; }
   .btn-export:hover { background: #333; }
 
-  /* two-column layout */
-  .work-area {
-    display: grid;
-    grid-template-columns: 400px 1fr;
-    gap: 20px;
-    align-items: start;
-  }
+  .work-area { display: grid; grid-template-columns: 380px 1fr; gap: 16px; align-items: start; }
 
-  /* ── EXTRACTION CARD ── */
-  .extraction-panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    position: sticky;
-    top: 72px;
-    box-shadow: var(--shadow);
-  }
-  .panel-header {
-    background: var(--text);
-    color: #fff;
-    padding: 12px 20px;
-    font-size: 11px;
-    font-family: 'DM Mono', monospace;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-  .extraction-card {
-    padding: 20px;
-  }
-  .ext-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    padding: 6px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .ext-row:last-child { border-bottom: none; }
-  .ext-label {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-family: 'DM Mono', monospace;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    min-width: 100px;
-  }
-  .ext-value {
-    font-size: 13px;
-    font-weight: 500;
-    text-align: right;
-    max-width: 240px;
-    word-break: break-word;
-  }
-  .ext-amount {
-    font-family: 'DM Mono', monospace;
-    font-size: 22px;
-    font-weight: 500;
-    color: var(--warn);
-    text-align: center;
-    padding: 16px 0 8px;
-    border-bottom: 2px solid var(--border);
-    margin-bottom: 4px;
-  }
+  /* ── EXT PANEL ── */
+  .ext-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; position: sticky; top: 68px; box-shadow: var(--shadow); }
+  .panel-hdr { background: #1A1916; color: #fff; padding: 10px 18px; font-size: 10px; font-family: 'DM Mono', monospace; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; justify-content: space-between; }
+  .nav-btns { display: flex; gap: 4px; }
+  .nav-btns button { width: 24px; height: 24px; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; background: transparent; color: #fff; cursor: pointer; font-size: 14px; line-height: 1; }
+  .nav-btns button:disabled { opacity: 0.3; cursor: default; }
+  .nav-btns button:not(:disabled):hover { background: rgba(255,255,255,0.12); }
+
+  .ext-amount-block { padding: 16px 18px 12px; border-bottom: 1px solid var(--border); text-align: center; }
+  .ext-amount { font-family: 'DM Mono', monospace; font-size: 28px; font-weight: 500; color: var(--warn); }
   .ext-amount.credit { color: var(--accent); }
+  .ext-amount-lbl { font-size: 10px; color: var(--text-muted); margin-top: 3px; letter-spacing: 0.06em; text-transform: uppercase; }
 
-  /* action buttons */
-  .ext-actions {
-    display: flex;
-    gap: 8px;
-    padding: 16px 20px;
-    border-top: 1px solid var(--border);
-  }
-  .btn-skip {
-    background: var(--skip-light);
-    color: var(--skip);
-    border: 1px solid var(--border-strong);
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    flex: 1;
-    transition: all 0.15s;
-  }
-  .btn-skip:hover { background: #E8E6E2; }
-  .btn-split {
-    background: var(--split-light);
-    color: var(--split);
-    border: 1px solid #BAD0EF;
-    padding: 8px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    flex: 1;
-    transition: all 0.15s;
-  }
-  .btn-split:hover { background: #DDE8F7; }
+  .ext-fields { padding: 10px 18px 6px; }
+  .ext-field { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .ext-field:last-child { border-bottom: none; }
+  .ext-flbl { font-size: 10px; color: var(--text-muted); font-family: 'DM Mono', monospace; text-transform: uppercase; letter-spacing: 0.04em; min-width: 86px; padding-top: 1px; flex-shrink: 0; }
+  .ext-fval { font-size: 12px; font-weight: 500; line-height: 1.4; word-break: break-word; }
+  .ext-fval.mono { font-family: 'DM Mono', monospace; }
 
-  /* split mode */
-  .split-panel {
-    display: none;
-    padding: 16px 20px;
-    border-top: 1px solid var(--border);
-    background: var(--split-light);
-    gap: 10px;
-    flex-direction: column;
-  }
-  .split-panel.open { display: flex; }
-  .split-panel label { font-size: 12px; font-weight: 600; color: var(--split); }
-  .split-panel input {
-    width: 100%;
-    padding: 8px 12px;
-    border: 1px solid #BAD0EF;
-    border-radius: 6px;
-    font-family: 'DM Mono', monospace;
-    font-size: 14px;
-    background: white;
-  }
-  .split-remaining {
-    font-size: 12px;
-    font-family: 'DM Mono', monospace;
-    color: var(--split);
-    text-align: right;
-  }
-  .split-remaining.warn { color: var(--warn); font-weight: 600; }
+  /* ── SPLIT ── */
+  .split-zone { display: none; padding: 14px 18px; border-top: 1px solid var(--border); background: var(--split-light); }
+  .split-zone.open { display: block; }
+  .split-zone > label { font-size: 11px; font-weight: 600; color: var(--split); display: block; margin-bottom: 8px; }
+  .split-zone input[type=number] { width: 100%; padding: 8px 12px; border: 1px solid #BAD0EF; border-radius: 6px; font-family: 'DM Mono', monospace; font-size: 15px; background: white; }
+  .split-remaining-bar { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; font-family: 'DM Mono', monospace; font-size: 12px; background: white; border: 1px solid #BAD0EF; border-radius: 6px; padding: 6px 12px; }
+  .split-remaining-bar .srl { color: var(--split); font-size: 11px; }
+  .split-remaining-bar .srv { font-weight: 600; color: var(--split); }
+  .split-remaining-bar .srv.over { color: var(--warn); }
+  .split-remaining-bar .srv.done { color: var(--accent); }
+  .split-already { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--split); margin-top: 6px; opacity: 0.8; }
+
+  /* ── ACTIONS ── */
+  .ext-actions { display: flex; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); }
+  .btn-skip { flex: 1; background: var(--skip-light); color: var(--skip); border: 1px solid var(--border-strong); padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .btn-skip:hover { background: #E2E0DB; }
+  .btn-split-toggle { flex: 1; background: var(--split-light); color: var(--split); border: 1px solid #BAD0EF; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+  .btn-split-toggle.active { background: var(--split); color: #fff; border-color: var(--split); }
+  .btn-split-toggle:hover:not(.active) { background: #DDE8F7; }
 
   /* ── BUDGET TABLE ── */
-  .budget-panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: var(--shadow);
-  }
-  .budget-table-wrap {
-    overflow-x: auto;
-    max-height: calc(100vh - 180px);
-    overflow-y: auto;
-  }
-  table.budget {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-  }
-  table.budget thead {
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    background: var(--text);
-    color: #fff;
-  }
-  table.budget th {
-    padding: 8px 10px;
-    text-align: left;
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    white-space: nowrap;
-    border-right: 1px solid rgba(255,255,255,0.08);
-    font-weight: 500;
-  }
-  table.budget td {
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--border);
-    border-right: 1px solid var(--border);
-    white-space: nowrap;
-  }
-  table.budget td.label-cell {
-    white-space: normal;
-    min-width: 180px;
-    max-width: 280px;
-    font-size: 12px;
-  }
-  table.budget td.num {
-    font-family: 'DM Mono', monospace;
-    text-align: right;
-  }
-  table.budget td.analytique {
-    font-family: 'DM Mono', monospace;
-    text-align: right;
-    font-weight: 600;
-    color: var(--warn);
-  }
-  table.budget td.factures {
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    color: var(--text-muted);
-    max-width: 140px;
-    white-space: normal;
-    word-break: break-all;
-  }
+  .budget-panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+  .click-hint { display: none; padding: 8px 18px; font-size: 12px; color: var(--accent); font-weight: 600; border-bottom: 1px solid var(--border); background: var(--accent-light); font-family: 'DM Mono', monospace; }
+  .click-hint.show { display: block; }
+  .budget-table-wrap { overflow: auto; max-height: calc(100vh - 170px); }
 
-  /* row types */
-  tr.row-header { background: var(--row-header); }
-  tr.row-header td { font-weight: 700; font-size: 12px; }
-  tr.row-section { background: var(--row-section); }
-  tr.row-section td { font-weight: 700; color: var(--text); }
-  tr.row-total { background: #F5F0E8; }
-  tr.row-total td { font-weight: 700; font-family: 'DM Mono', monospace; }
-  tr.row-data { background: var(--row-clickable); cursor: pointer; transition: background 0.1s; }
-  tr.row-data:hover { background: var(--row-hover); }
-  tr.row-data.just-assigned { background: var(--row-selected); }
-  tr.row-data.targeted { background: var(--highlight); box-shadow: inset 0 0 0 2px var(--accent); }
-  tr.row-data.targeted td { color: var(--text); }
+  table.bt { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.bt thead { position: sticky; top: 0; z-index: 10; }
+  table.bt th { background: #1A1916; color: #fff; padding: 7px 9px; text-align: left; font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap; border-right: 1px solid rgba(255,255,255,0.07); font-weight: 500; }
+  table.bt td { padding: 5px 9px; border-bottom: 1px solid var(--border); border-right: 1px solid #EBEBEB; white-space: nowrap; }
+  table.bt td.lc { white-space: normal; min-width: 160px; max-width: 250px; }
+  table.bt td.nc { font-family: 'DM Mono', monospace; text-align: right; }
+  table.bt td.ac { font-family: 'DM Mono', monospace; text-align: right; font-weight: 600; color: var(--warn); }
+  table.bt td.ac.filled { background: #FFF8F0; color: var(--warn); }
+  table.bt td.fc { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--text-muted); max-width: 160px; white-space: normal; word-break: break-all; line-height: 1.5; }
 
-  /* click hint */
-  .click-hint {
-    padding: 10px 20px;
-    font-size: 12px;
-    color: var(--accent);
-    font-weight: 600;
-    border-bottom: 1px solid var(--border);
-    background: var(--accent-light);
-    font-family: 'DM Mono', monospace;
-    display: none;
-  }
-  .click-hint.visible { display: block; }
+  tr.rt-header td { background: #D4EAF3; font-weight: 700; font-size: 11px; }
+  tr.rt-section td { background: #CEDBE6; font-weight: 700; }
+  tr.rt-summary td { background: #F5F0E4; font-weight: 700; font-family: 'DM Mono', monospace; }
+  tr.rt-total td { font-weight: 700; font-family: 'DM Mono', monospace; font-size: 12px; background: #FAFAF6; }
+  tr.rt-data { cursor: pointer; }
+  tr.rt-data:hover td { background: var(--row-hover) !important; }
+  tr.rt-data.assigned td { background: var(--row-assigned); }
+  tr.rt-data.assigned td.ac { color: var(--accent); }
+  tr.rt-data.flash td { background: var(--flash) !important; }
 
-  /* ── DONE SCREEN ── */
-  #screen-done {
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    min-height: 80vh;
-    gap: 24px;
-    text-align: center;
-  }
-  #screen-done.active { display: flex; }
-  .done-icon { font-size: 64px; }
-  .done-title { font-family: 'DM Mono', monospace; font-size: 26px; font-weight: 500; }
-  .done-sub { color: var(--text-muted); max-width: 400px; line-height: 1.6; }
-  .btn-dl {
-    background: var(--accent);
-    color: white;
-    border: none;
-    padding: 14px 40px;
-    border-radius: 8px;
-    font-size: 15px;
-    font-weight: 600;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-    transition: background 0.2s;
-  }
+  /* ── DONE ── */
+  #screen-done { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh; gap: 20px; text-align: center; padding: 40px; }
+  .done-icon { font-size: 52px; }
+  .done-title { font-family: 'DM Mono', monospace; font-size: 22px; }
+  .done-sub { color: var(--text-muted); max-width: 420px; line-height: 1.6; font-size: 13px; }
+  .skipped-box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; text-align: left; max-width: 600px; width: 100%; max-height: 260px; overflow-y: auto; }
+  .skipped-box h4 { font-size: 11px; font-family: 'DM Mono', monospace; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .skipped-item { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; gap: 10px; }
+  .skipped-item:last-child { border-bottom: none; }
+  .si-desc { flex: 1; min-width: 0; }
+  .si-desc .main { font-weight: 600; }
+  .si-desc .sub { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+  .si-ndoc { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+  .si-amt { font-family: 'DM Mono', monospace; font-weight: 600; color: var(--warn); white-space: nowrap; }
+  .btn-dl { background: var(--accent); color: white; border: none; padding: 13px 36px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; }
   .btn-dl:hover { background: #234820; }
-  .btn-restart {
-    background: transparent;
-    color: var(--text-muted);
-    border: 1px solid var(--border-strong);
-    padding: 10px 24px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    font-family: 'DM Sans', sans-serif;
-  }
+  .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border-strong); padding: 9px 22px; border-radius: 8px; font-size: 12px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; }
 
-  /* toast */
-  .toast {
-    position: fixed;
-    bottom: 32px;
-    right: 32px;
-    background: var(--text);
-    color: #fff;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    box-shadow: var(--shadow-md);
-    transform: translateY(20px);
-    opacity: 0;
-    transition: all 0.3s;
-    z-index: 200;
-    max-width: 320px;
-  }
+  .toast { position: fixed; bottom: 28px; right: 28px; background: #1A1916; color: #fff; padding: 10px 18px; border-radius: 8px; font-size: 12px; font-weight: 500; box-shadow: 0 4px 16px rgba(0,0,0,0.15); transform: translateY(16px); opacity: 0; transition: all 0.25s; z-index: 300; max-width: 300px; }
   .toast.show { opacity: 1; transform: translateY(0); }
-  .toast.green { background: var(--accent); }
+  .toast.ok { background: var(--accent); }
 
-  /* nav pills for extraction list */
-  .ext-nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 20px;
-    border-bottom: 1px solid var(--border);
-    font-size: 12px;
-    font-family: 'DM Mono', monospace;
-    color: var(--text-muted);
-  }
-  .ext-nav-arrows { display: flex; gap: 6px; }
-  .ext-nav-arrows button {
-    width: 28px; height: 28px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: transparent;
-    cursor: pointer;
-    font-size: 14px;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.15s;
-  }
-  .ext-nav-arrows button:hover { background: var(--border); }
-  .ext-nav-arrows button:disabled { opacity: 0.3; cursor: not-allowed; }
-
-  /* skipped badge */
-  .badge-skipped {
-    display: inline-block;
-    background: var(--skip-light);
-    color: var(--skip);
-    border: 1px solid var(--border-strong);
-    padding: 2px 8px;
-    border-radius: 20px;
-    font-size: 10px;
-    font-family: 'DM Mono', monospace;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-
-  @media (max-width: 900px) {
+  @media (max-width: 860px) {
     .work-area { grid-template-columns: 1fr; }
     .upload-grid { grid-template-columns: 1fr; }
-    .extraction-panel { position: static; }
-    .budget-table-wrap { max-height: 50vh; }
+    .ext-panel { position: static; }
+    .budget-table-wrap { max-height: 45vh; }
   }
 </style>
 </head>
 <body>
 
 <header class="app-header">
-  <div>
-    <div class="app-title" style="display:flex;align-items:center;gap:12px">
-      <h1>ANALYTIQUE // BUDGET</h1>
-    </div>
-    <div class="subtitle">Outil de mise à jour budgétaire</div>
-  </div>
-  <div class="session-badge" id="sessionBadge">Aucune session active</div>
+  <div><h1>ANALYTIQUE ↔ BUDGET</h1><div class="sub">Outil de mise à jour budgétaire</div></div>
+  <div id="sessionBadge">—</div>
 </header>
 
-<div class="app-body">
-
-  <!-- ══ UPLOAD SCREEN ══ -->
-  <div id="screen-upload">
-    <div class="upload-title">Charger les fichiers<br><span>pour commencer</span></div>
-
-    <div class="upload-grid">
-      <div class="upload-card" id="card-budget">
-        <input type="file" accept=".xlsx,.xls" id="file-budget" onchange="handleFile('budget', this)">
-        <div class="upload-icon">📊</div>
-        <h3>Budget Excel</h3>
-        <p>Fichier EVENT_XXXXX.xlsx</p>
-        <div class="file-name" id="name-budget"></div>
-      </div>
-      <div class="upload-card" id="card-extraction">
-        <input type="file" accept=".xlsx,.xls" id="file-extraction" onchange="handleFile('extraction', this)">
-        <div class="upload-icon">📋</div>
-        <h3>Extraction Winbooks</h3>
-        <p>Historique périodique analytique</p>
-        <div class="file-name" id="name-extraction"></div>
-      </div>
+<!-- UPLOAD -->
+<div id="screen-upload" class="screen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:85vh;gap:28px;padding:40px">
+  <div class="upload-title">Charger les fichiers<br><span>pour démarrer</span></div>
+  <div class="upload-grid">
+    <div class="upload-card" id="card-budget">
+      <input type="file" accept=".xlsx,.xls" onchange="handleFile('budget',this)">
+      <div class="icon">📊</div><h3>Budget Excel</h3><p>Fichier EVENT_XXXXX.xlsx</p>
+      <div class="fname" id="fname-budget"></div>
     </div>
-
-    <div class="session-info" id="sessionInfo">
-      💾 La session est sauvegardée automatiquement dans votre navigateur.
+    <div class="upload-card" id="card-extraction">
+      <input type="file" accept=".xlsx,.xls" onchange="handleFile('extraction',this)">
+      <div class="icon">📋</div><h3>Extraction Winbooks</h3><p>Historique périodique analytique</p>
+      <div class="fname" id="fname-extraction"></div>
     </div>
-
-    <button class="btn-start" id="btn-start" onclick="startSession()">
-      ▶ Démarrer la session
-    </button>
   </div>
+  <div class="session-note" id="session-note">💾 La session est sauvegardée automatiquement dans le navigateur.</div>
+  <button id="btn-start" onclick="startSession()">▶ Démarrer la session</button>
+</div>
 
-  <!-- ══ MAIN SCREEN ══ -->
-  <div id="screen-main">
-    <div class="progress-bar-wrap">
-      <div style="font-size:12px;font-family:'DM Mono',monospace;white-space:nowrap;min-width:160px" id="progressLabel">Ligne 0 / 0</div>
-      <div class="progress-bar-track">
-        <div class="progress-bar-fill" id="progressFill" style="width:0%"></div>
+<!-- MAIN -->
+<div id="screen-main" class="screen">
+  <div class="prog-bar-wrap">
+    <div id="prog-label">0 / 0 lignes</div>
+    <div class="prog-track"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    <div id="prog-pct">0%</div>
+    <button class="btn-export" onclick="exportBudget()">⬇ Exporter Excel</button>
+  </div>
+  <div class="work-area">
+    <div class="ext-panel">
+      <div class="panel-hdr">
+        <span id="ext-nav-lbl">— / —</span>
+        <div class="nav-btns">
+          <button onclick="navExt(-1)" id="nav-prev" disabled>‹</button>
+          <button onclick="navExt(+1)" id="nav-next" disabled>›</button>
+        </div>
       </div>
-      <div class="progress-text" id="progressPct">0%</div>
-      <button class="btn-export" onclick="exportBudget()">⬇ Exporter Excel</button>
+      <div class="ext-amount-block">
+        <div class="ext-amount" id="ext-amount">—</div>
+        <div class="ext-amount-lbl" id="ext-amount-lbl">à affecter</div>
+      </div>
+      <div class="ext-fields" id="ext-fields"></div>
+      <div class="split-zone" id="split-zone">
+        <label>Montant partiel à affecter (€)</label>
+        <input type="number" id="split-input" step="0.01" min="0.01" placeholder="0.00" oninput="onSplitInput()">
+        <div class="split-remaining-bar">
+          <span class="srl">Restant disponible</span>
+          <span class="srv" id="split-rem">—</span>
+        </div>
+        <div class="split-already" id="split-already"></div>
+      </div>
+      <div class="ext-actions">
+        <button class="btn-skip" onclick="skipLine()">⏩ Passer</button>
+        <button class="btn-split-toggle" id="btn-split" onclick="toggleSplit()">✂ Splitter</button>
+      </div>
     </div>
-
-    <div class="work-area">
-
-      <!-- LEFT: extraction card -->
-      <div class="extraction-panel">
-        <div class="panel-header">Ligne d'extraction à traiter</div>
-        <div class="ext-nav">
-          <span id="extNavLabel">— / —</span>
-          <div class="ext-nav-arrows">
-            <button onclick="navExtraction(-1)" id="navPrev" disabled title="Précédente">‹</button>
-            <button onclick="navExtraction(+1)" id="navNext" disabled title="Suivante">›</button>
-          </div>
-        </div>
-        <div class="extraction-card" id="extractionCard">
-          <!-- populated by JS -->
-        </div>
-        <div class="split-panel" id="splitPanel">
-          <label>Montant partiel à affecter (€)</label>
-          <input type="number" id="splitAmount" step="0.01" placeholder="0.00" oninput="onSplitInput()">
-          <div class="split-remaining" id="splitRemaining"></div>
-        </div>
-        <div class="ext-actions">
-          <button class="btn-skip" onclick="skipLine()">⏩ Passer</button>
-          <button class="btn-split" id="btnSplit" onclick="toggleSplit()">✂ Splitter</button>
-        </div>
-      </div>
-
-      <!-- RIGHT: budget table -->
-      <div class="budget-panel">
-        <div class="click-hint" id="clickHint">
-          ↓ Cliquez sur une ligne budgétaire pour y affecter ce montant
-        </div>
-        <div class="budget-table-wrap">
-          <table class="budget" id="budgetTable">
-            <thead id="budgetHead"></thead>
-            <tbody id="budgetBody"></tbody>
-          </table>
-        </div>
+    <div class="budget-panel">
+      <div class="click-hint show" id="click-hint">↓ Cliquez sur une ligne budgétaire pour y affecter le montant affiché à gauche</div>
+      <div class="budget-table-wrap">
+        <table class="bt"><thead id="bt-head"></thead><tbody id="bt-body"></tbody></table>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- ══ DONE SCREEN ══ -->
-  <div id="screen-done">
-    <div class="done-icon">✅</div>
-    <div class="done-title">Toutes les lignes traitées !</div>
-    <div class="done-sub">Le budget a été mis à jour avec toutes les lignes de l'extraction. Vous pouvez exporter le fichier Excel.</div>
-    <button class="btn-dl" onclick="exportBudget()">⬇ Télécharger le budget mis à jour</button>
-    <button class="btn-restart" onclick="resetAll()">↺ Nouvelle session</button>
+<!-- DONE -->
+<div id="screen-done" class="screen">
+  <div class="done-icon">✅</div>
+  <div class="done-title">Toutes les lignes traitées !</div>
+  <div class="done-sub">Le budget a été mis à jour. Vous pouvez exporter le fichier Excel final.</div>
+  <div class="skipped-box" id="skipped-box" style="display:none">
+    <h4>⏩ Lignes passées (non affectées)</h4>
+    <div id="skipped-items"></div>
   </div>
-
+  <button class="btn-dl" onclick="exportBudget()">⬇ Télécharger le budget mis à jour</button>
+  <button class="btn-ghost" onclick="resetAll()">↺ Nouvelle session</button>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-// ═══════════════════════════════════════════
+// ═══════════════════════════
+//  CONSTANTS
+// ═══════════════════════════
+const STORAGE_KEY = 'analytique_budget_v3';
+const SEP = '|';
+
+// ═══════════════════════════
 //  STATE
-// ═══════════════════════════════════════════
-const STORAGE_KEY = 'analytique_session_v2';
-const FACTURE_SEP = '|';
+// ═══════════════════════════
+let budgetWb = null;
+let bMeta = { sheetName:'', analCol:8, factCol:13, headerRow:7, rows:[] }; // 0-based indices
 
-let budgetWb = null;        // parsed XLSX workbook
-let budgetRows = [];        // [{rowIdx, cells, isClickable, rowType}]
-let budgetColMap = {};      // col name → col index (0-based)
-let analytiqueCol = -1;     // 0-based col index for ANALYTIQUE (col I = 8)
-let facturesCol = -1;       // 0-based col index for N°Factures (new col N = 13)
-let commentaireCol = -1;    // last original col (M = 12)
-let budgetMaxCol = 0;
-
-let extractionRows = [];    // [{libelle, nom, periode, journal, ndoc, date, solde, commentaire, key}]
-let currentExtIdx = 0;      // which extraction line we're on
+let extRows = [];         // parsed extraction lines
+let curIdx = 0;           // current extraction line pointer
 let splitMode = false;
-let splitRemaining = 0;
+let splitUsed = 0;        // already assigned in current split session
 
-let session = {             // persisted to localStorage
-  processed: {},            // key → {budgetRowIdx, amount, ndoc}[] 
-  assignments: {},          // budgetRowIdx → {total, ndocs:[]}
-  currentExtIdx: 0
+let session = {
+  processed: {},          // extKey → {skipped, assignments:[{rowNum,amount,isCredit,ndoc}]}
+  rowData: {},            // rowNum(1-based) → {parts:[{signed,abs,isCredit}], ndocs:[]}
+  curIdx: 0
 };
 
-// ═══════════════════════════════════════════
-//  INIT / STORAGE
-// ═══════════════════════════════════════════
+// ═══════════════════════════
+//  INIT
+// ═══════════════════════════
 window.onload = () => {
-  loadSession();
-};
-
-function loadSession() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      session = JSON.parse(saved);
-      document.getElementById('sessionInfo').textContent =
-        '💾 Session sauvegardée détectée — chargez vos fichiers pour reprendre.';
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (s) {
+      session = JSON.parse(s);
+      document.getElementById('session-note').textContent =
+        '💾 Session en cours trouvée — rechargez vos fichiers pour reprendre.';
     }
   } catch(e) {}
-}
+};
 
 function saveSession() {
-  session.currentExtIdx = currentExtIdx;
+  session.curIdx = curIdx;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  const ts = new Date().toLocaleTimeString('fr-BE');
-  document.getElementById('sessionBadge').textContent = 'Sauvegardé à ' + ts;
+  document.getElementById('sessionBadge').textContent = '💾 ' + new Date().toLocaleTimeString('fr-BE');
 }
 
 function resetAll() {
-  if (!confirm('Réinitialiser complètement la session ?')) return;
+  if (!confirm('Réinitialiser la session ?')) return;
   localStorage.removeItem(STORAGE_KEY);
   location.reload();
 }
 
-// ═══════════════════════════════════════════
-//  FILE HANDLING
-// ═══════════════════════════════════════════
+// ═══════════════════════════
+//  FILE LOADING
+// ═══════════════════════════
 function handleFile(type, input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     const data = new Uint8Array(e.target.result);
-    const wb = XLSX.read(data, { type: 'array', cellStyles: true, cellNF: true });
     if (type === 'budget') {
-      budgetWb = wb;
-      document.getElementById('name-budget').textContent = file.name;
+      // Load with cell styles for faithful export
+      budgetWb = XLSX.read(data, { type:'array', cellStyles:true, cellNF:true, bookVBA:true });
+      parseBudget();
+      document.getElementById('fname-budget').textContent = file.name;
       document.getElementById('card-budget').classList.add('loaded');
-      parseBudget(wb);
     } else {
+      const wb = XLSX.read(data, { type:'array', cellNF:true });
       parseExtraction(wb);
-      document.getElementById('name-extraction').textContent = file.name;
+      document.getElementById('fname-extraction').textContent = file.name;
       document.getElementById('card-extraction').classList.add('loaded');
     }
     checkReady();
@@ -730,585 +322,502 @@ function handleFile(type, input) {
   reader.readAsArrayBuffer(file);
 }
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 //  PARSE BUDGET
-// ═══════════════════════════════════════════
-function parseBudget(wb) {
-  const ws = wb.Sheets[wb.SheetNames[0]];
+// ═══════════════════════════
+function parseBudget() {
+  const sheetName = budgetWb.SheetNames[0];
+  bMeta.sheetName = sheetName;
+  const ws = budgetWb.Sheets[sheetName];
+  if (!ws || !ws['!ref']) return;
   const range = XLSX.utils.decode_range(ws['!ref']);
-  budgetMaxCol = range.e.c + 1;
 
-  // Find header row (row with ANALYTIQUE / PREVISIONNEL)
-  let headerRow = -1;
-  for (let r = range.s.r; r <= range.e.r; r++) {
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const cell = ws[XLSX.utils.encode_cell({r, c})];
-      if (cell && cell.v && String(cell.v).toUpperCase().includes('ANALYTIQUE')) {
-        headerRow = r;
-        break;
-      }
-    }
-    if (headerRow >= 0) break;
-  }
+  // Detect ANALYTIQUE col (second occurrence of 'ANALYTIQUE' in header area)
+  // Also detect Commentaire col to place new col after it
+  let analCol = 8; // default: col I (0-based)
+  let commentCol = 12; // default: col M (0-based)
+  let headerRow = 7; // default: row 8 (0-based)
+  let analFound = 0;
 
-  // Map columns by header
-  if (headerRow >= 0) {
+  for (let r = range.s.r; r <= Math.min(range.e.r, 25); r++) {
     for (let c = range.s.c; c <= range.e.c; c++) {
-      const cell = ws[XLSX.utils.encode_cell({r: headerRow, c})];
-      if (cell && cell.v) {
-        const v = String(cell.v).trim().toUpperCase();
-        if (v === 'ANALYTIQUE' || v === 'ANALYTIQUE ') analytiqueCol = c;
-        if (v === 'COMMENTAIRE') commentaireCol = c;
-      }
+      const cell = ws[XLSX.utils.encode_cell({r,c})];
+      if (!cell || !cell.v) continue;
+      const v = String(cell.v).trim().toUpperCase();
+      if (v === 'ANALYTIQUE') { analFound++; if (analFound === 2) { analCol = c; headerRow = r; } }
+      if (v === 'COMMENTAIRE') commentCol = c;
     }
   }
 
-  // If no commentaire col found, use last col
-  if (commentaireCol < 0) commentaireCol = range.e.c;
-  // Factures col = commentaireCol + 1 (or existing if already there)
-  facturesCol = commentaireCol + 1;
-
-  // Check if factures col already exists (resuming session)
-  const headerCellFact = ws[XLSX.utils.encode_cell({r: headerRow, c: facturesCol})];
-  if (headerCellFact && headerCellFact.v && String(headerCellFact.v).includes('Facture')) {
-    // already has the column
-  }
+  bMeta.analCol = analCol;
+  bMeta.factCol = commentCol + 1;
+  bMeta.headerRow = headerRow;
 
   // Parse rows
-  budgetRows = [];
+  bMeta.rows = [];
   for (let r = range.s.r; r <= range.e.r; r++) {
+    const fc = ws[XLSX.utils.encode_cell({r, c: range.s.c})];
+    let bg = '00000000';
+    try { const fgc = fc && fc.s && fc.s.fgColor; if (fgc && fgc.rgb) bg = fgc.rgb; } catch(e) {}
+    const bold = (fc && fc.s && fc.s.bold) || false;
+
+    let rowType = 'other', isClickable = false;
+    if      (bg === 'FFD4EAF3')            rowType = 'header';
+    else if (bg === 'FFCEDBE6')            rowType = 'section';
+    else if (bold && bg.startsWith('FF') && bg !== 'FF000000') rowType = 'total';
+    else if (bold)                         rowType = 'summary';
+    else if (!bold)                        { rowType = 'data'; isClickable = true; }
+
     const cells = [];
-    for (let c = range.s.c; c <= Math.max(range.e.c, facturesCol); c++) {
-      const cellAddr = XLSX.utils.encode_cell({r, c});
-      const cell = ws[cellAddr] || {};
-      cells.push({
-        v: cell.v !== undefined ? cell.v : '',
-        f: cell.f || null,
-        s: cell.s || {},
-        t: cell.t || 'z',
-        z: cell.z || null,
-        raw: cell
-      });
+    for (let c = range.s.c; c <= Math.max(range.e.c, bMeta.factCol); c++) {
+      const cell = ws[XLSX.utils.encode_cell({r,c})] || {};
+      cells.push({ v: cell.v !== undefined ? cell.v : null, f: cell.f || null, t: cell.t || 'z', z: cell.z || null, s: cell.s || null });
     }
 
-    // Determine row type
-    const firstCell = cells[0];
-    const bg = (firstCell.s && firstCell.s.fgColor && firstCell.s.fgColor.rgb) || '00000000';
-    const bold = (firstCell.s && firstCell.s.bold) || false;
-
-    let rowType = 'skip';
-    let isClickable = false;
-
-    if (r === headerRow || r === 0) {
-      rowType = 'header';
-    } else if (bg === 'FFD4EAF3') {
-      rowType = 'header-section';
-    } else if (bg === 'FFCEDBE6') {
-      rowType = 'section';
-    } else if (bold && bg !== '00000000') {
-      rowType = 'total';
-    } else if (!bold && (bg === '00000000' || bg === '')) {
-      // check if row has any non-formula content or is clearly a data row
-      const hasLabel = firstCell.v && String(firstCell.v).trim().length > 0;
-      // Also include empty label rows that are data rows (they just have formulas)
-      const hasAnyContent = cells.some(c => c.v !== '' && c.v !== undefined);
-      rowType = 'data';
-      isClickable = true;
-    } else if (bold) {
-      rowType = 'total';
-    }
-
-    // Pre-populate from session
-    const existing = session.assignments[r];
-
-    budgetRows.push({ rowIdx: r, cells, rowType, isClickable, existing });
+    bMeta.rows.push({ rowNum: r+1, rowIdx: r, isClickable, rowType, cells });
   }
 }
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 //  PARSE EXTRACTION
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 function parseExtraction(wb) {
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+  const data = XLSX.utils.sheet_to_json(ws, { header:1, raw:true });
 
-  // Find header row
   let hRow = -1;
   for (let i = 0; i < data.length; i++) {
-    const row = data[i];
-    if (row && row.some(v => v && String(v).toLowerCase().includes('libellé'))) {
-      hRow = i;
-      break;
+    if (data[i] && data[i].some(v => v && String(v).toLowerCase().includes('libellé') || String(v||'').toLowerCase().includes('libelle'))) {
+      hRow = i; break;
     }
   }
-  if (hRow < 0) { showToast('Impossible de trouver les en-têtes dans l\'extraction.', 'warn'); return; }
+  if (hRow < 0) { showToast('En-têtes introuvables dans l\'extraction.', 'warn'); return; }
 
-  const headers = data[hRow].map(v => String(v || '').toLowerCase());
-  const col = (name) => headers.findIndex(h => h.includes(name));
+  const hdrs = data[hRow].map(v => String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim());
+  const ci = (kw) => hdrs.findIndex(h => h.includes(kw));
 
-  const cLibelle = col('libellé');
-  const cNom = col('nom');
-  const cPeriode = col('periode') >= 0 ? col('periode') : col('péri');
-  const cJournal = col('journal');
-  const cNdoc = col('doc');
-  const cDate = col('date');
-  const cDebit = col('débit') >= 0 ? col('débit') : col('debit');
-  const cCredit = col('crédit') >= 0 ? col('crédit') : col('credit');
-  const cSolde = col('solde');
-  const cComment = col('commentaire');
+  const cLib=ci('libelle'), cNom=ci('nom'), cPer=ci('period'),
+        cJnl=ci('journal'), cDoc=ci('doc'), cDte=ci('date'),
+        cSld=ci('solde'), cCmt=ci('comment');
 
-  extractionRows = [];
-  for (let i = hRow + 1; i < data.length; i++) {
-    const row = data[i];
-    if (!row || row.every(v => v === null || v === undefined || v === '')) continue;
+  const rows = [];
+  for (let i = hRow+1; i < data.length; i++) {
+    const r = data[i];
+    if (!r || r.every(v => v===null||v===undefined||v==='')) continue;
 
-    const solde = parseFloat(row[cSolde]) || 0;
-    if (solde === 0 && !row[cNdoc]) continue; // skip empty/total rows
+    const ndoc = String(r[cDoc]||'').trim();
+    // Point 4: skip rows without ndoc (likely totals at the end)
+    if (!ndoc) continue;
 
-    let dateVal = row[cDate];
+    const solde = parseFloat(r[cSld]) || 0;
+    const commentaire = String(r[cCmt]||'').trim();
+
+    let dateVal = r[cDte];
     if (typeof dateVal === 'number') {
-      // Excel date serial
       const d = XLSX.SSF.parse_date_code(dateVal);
       dateVal = `${String(d.d).padStart(2,'0')}/${String(d.m).padStart(2,'0')}/${d.y}`;
-    } else if (dateVal) {
-      dateVal = String(dateVal);
-    }
+    } else dateVal = String(dateVal||'');
 
-    const ndoc = String(row[cNdoc] || '').trim();
-    const key = ndoc + '||' + Math.round(Math.abs(solde) * 100) + '||' + String(row[cComment] || '').trim().substring(0,30);
+    // Point 6: unique key for dedup: ndoc + rounded solde + commentaire snippet
+    const key = ndoc + '§' + Math.round(Math.abs(solde)*100) + '§' + commentaire.substring(0,40);
 
-    extractionRows.push({
-      libelle: String(row[cLibelle] || '').trim(),
-      nom: String(row[cNom] || '').trim(),
-      periode: String(row[cPeriode] || '').trim(),
-      journal: String(row[cJournal] || '').trim(),
-      ndoc,
-      date: dateVal || '',
-      debit: parseFloat(row[cDebit]) || 0,
-      credit: parseFloat(row[cCredit]) || 0,
-      solde,
-      commentaire: String(row[cComment] || '').trim(),
-      key
-    });
+    rows.push({ libelle:String(r[cLib]||'').trim(), nom:String(r[cNom]||'').trim(),
+      periode:String(r[cPer]||'').trim(), journal:String(r[cJnl]||'').trim(),
+      ndoc, date:dateVal, solde, commentaire, key });
   }
+
+  extRows = rows;
 }
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 //  START SESSION
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 function checkReady() {
-  const ready = budgetWb && extractionRows.length > 0;
-  const btn = document.getElementById('btn-start');
-  btn.classList.toggle('visible', ready);
+  const ok = budgetWb && extRows.length > 0;
+  document.getElementById('btn-start').classList.toggle('show', ok);
 }
 
 function startSession() {
-  if (!budgetWb || extractionRows.length === 0) return;
-
-  // Restore current idx from session
-  currentExtIdx = session.currentExtIdx || 0;
-
-  // Skip already-processed lines
-  while (currentExtIdx < extractionRows.length && session.processed[extractionRows[currentExtIdx].key]) {
-    currentExtIdx++;
-  }
-
-  document.getElementById('screen-upload').style.display = 'none';
-  document.getElementById('screen-main').classList.add('active');
-
-  renderBudgetTable();
-  renderExtractionCard();
-  updateProgress();
+  if (!budgetWb || !extRows.length) return;
+  curIdx = session.curIdx || 0;
+  advancePast();
+  show('main');
+  renderBudget();
+  renderExt();
+  updateProg();
 }
 
-// ═══════════════════════════════════════════
+function advancePast() {
+  while (curIdx < extRows.length && session.processed[extRows[curIdx].key]) curIdx++;
+}
+
+// ═══════════════════════════
 //  RENDER BUDGET TABLE
-// ═══════════════════════════════════════════
-function renderBudgetTable() {
-  const head = document.getElementById('budgetHead');
-  const body = document.getElementById('budgetBody');
-  head.innerHTML = '';
-  body.innerHTML = '';
+// ═══════════════════════════
+function renderBudget() {
+  const head = document.getElementById('bt-head');
+  const body = document.getElementById('bt-body');
+  const aC = bMeta.analCol, fC = bMeta.factCol;
 
-  // Determine columns to show
-  const colLabels = buildColLabels();
-
-  // Header
+  // Headers
+  const maxCols = bMeta.rows.reduce((m,r)=>Math.max(m,r.cells.length),0);
+  // Get labels from header row
+  const hRow = bMeta.rows.find(r => r.rowIdx === bMeta.headerRow);
+  const hCells = hRow ? hRow.cells : [];
   const tr = document.createElement('tr');
-  colLabels.forEach(lbl => {
+  for (let c=0; c<maxCols; c++) {
     const th = document.createElement('th');
-    th.textContent = lbl;
+    if (c === fC) th.textContent = 'N° Factures';
+    else th.textContent = hCells[c] ? String(hCells[c].v||'') : '';
     tr.appendChild(th);
-  });
-  head.appendChild(tr);
+  }
+  head.innerHTML = ''; head.appendChild(tr);
 
-  // Rows
-  budgetRows.forEach(row => {
+  // Body
+  body.innerHTML = '';
+  bMeta.rows.forEach(row => {
     const tr = document.createElement('tr');
-    const typeClass = {
-      'header': 'row-header',
-      'header-section': 'row-header',
-      'section': 'row-section',
-      'total': 'row-total',
-      'data': 'row-data',
-      'skip': ''
-    }[row.rowType] || '';
-
+    tr.dataset.rn = row.rowNum;
+    const typeClass = {header:'rt-header',section:'rt-section',summary:'rt-summary',total:'rt-total',data:'rt-data'}[row.rowType];
     if (typeClass) tr.classList.add(typeClass);
-    tr.dataset.rowidx = row.rowIdx;
+    const rd = session.rowData[row.rowNum];
+    if (rd) tr.classList.add('assigned');
+    if (row.isClickable) { tr.addEventListener('click', ()=>assignToRow(row.rowNum)); tr.title='Affecter à cette ligne'; }
 
-    if (row.isClickable) {
-      tr.addEventListener('click', () => assignToRow(row.rowIdx));
-    }
-
-    // Check if already has analytique from session
-    const assigned = session.assignments[row.rowIdx];
-    if (assigned && row.isClickable) tr.classList.add('just-assigned');
-
-    row.cells.forEach((cell, ci) => {
+    row.cells.forEach((cell,ci) => {
       const td = document.createElement('td');
-      const isAnal = ci === analytiqueCol;
-      const isFact = ci === facturesCol;
+      const isA = ci===aC, isF = ci===fC;
+      if (ci===0) td.classList.add('lc');
+      else if (isA) td.classList.add('ac');
+      else if (isF) td.classList.add('fc');
+      else td.classList.add('nc');
 
-      if (ci === 0) td.classList.add('label-cell');
-      else if (isAnal) td.classList.add('analytique');
-      else if (isFact) td.classList.add('factures');
-      else td.classList.add('num');
-
-      // Display value
-      let display = '';
-      if (isAnal && assigned) {
-        // sum of original + all session assignments
-        const base = typeof cell.v === 'number' ? cell.v : (parseFloat(cell.v) || 0);
-        display = fmtNum(base + assigned.total);
-      } else if (isFact && assigned) {
-        display = assigned.ndocs.join(' | ');
-      } else if (isFact) {
-        // Check existing content from file
-        display = String(cell.v || '');
+      if (isF) {
+        td.textContent = rd ? rd.ndocs.join(' | ') : (cell.v!==null?String(cell.v||''):'');
+      } else if (isA) {
+        if (rd) {
+          const base = typeof cell.v==='number' ? cell.v : 0;
+          td.textContent = fmtN(base + rd.parts.reduce((s,p)=>s+p.signed,0));
+          td.classList.add('filled');
+        } else {
+          td.textContent = cell.v!==null ? fmtCell(cell) : '';
+        }
       } else {
-        display = formatCellDisplay(cell, ci);
+        td.textContent = cell.v!==null ? fmtCell(cell) : '';
       }
-
-      td.textContent = display;
       tr.appendChild(td);
     });
-
     body.appendChild(tr);
   });
 }
 
-function buildColLabels() {
-  // Use actual header row values
-  const headerRow = budgetRows.find(r => r.rowType === 'header');
-  if (!headerRow) return [];
-  return headerRow.cells.map((c, i) => {
-    if (i === facturesCol) return 'N° Factures';
-    return String(c.v || '').trim() || String.fromCharCode(65 + i);
-  });
+function fmtCell(c) {
+  if (c.v===null||c.v===undefined) return '';
+  if (typeof c.v==='number') { if(c.v===0) return '0'; return c.v.toLocaleString('fr-BE',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  return String(c.v);
 }
-
-function formatCellDisplay(cell, colIdx) {
-  if (cell.v === '' || cell.v === undefined || cell.v === null) return '';
-  if (typeof cell.v === 'number') {
-    if (cell.v === 0) return '0';
-    return fmtNum(cell.v);
-  }
-  return String(cell.v);
+function fmtN(n) {
+  n=parseFloat(n)||0;
+  if(n===0) return '0';
+  return n.toLocaleString('fr-BE',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
+function fmtFml(n) { return Number(n.toFixed(2)).toString(); }
 
-function fmtNum(n) {
-  if (n === 0 || n === '' || n === null || n === undefined) return '0';
-  if (typeof n !== 'number') n = parseFloat(n) || 0;
-  return n.toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 //  RENDER EXTRACTION CARD
-// ═══════════════════════════════════════════
-function renderExtractionCard() {
-  // Advance past processed
-  while (currentExtIdx < extractionRows.length && session.processed[extractionRows[currentExtIdx].key]) {
-    currentExtIdx++;
-  }
+// ═══════════════════════════
+function renderExt() {
+  advancePast();
+  if (curIdx >= extRows.length) { showDone(); return; }
 
-  if (currentExtIdx >= extractionRows.length) {
-    showDone();
-    return;
-  }
-
-  const ext = extractionRows[currentExtIdx];
-  const card = document.getElementById('extractionCard');
+  const ext = extRows[curIdx];
   const isCredit = ext.solde < 0;
+  const abs = Math.abs(ext.solde);
 
-  card.innerHTML = `
-    <div class="ext-amount ${isCredit ? 'credit' : ''}">
-      ${isCredit ? '−' : '+'}${Math.abs(ext.solde).toLocaleString('fr-BE', {minimumFractionDigits:2})} €
-    </div>
-    ${row('Libellé', ext.libelle)}
-    ${row('Commentaire', ext.commentaire || '—')}
-    ${row('Nom', ext.nom || '—')}
-    ${row('N°Doc', ext.ndoc || '—')}
-    ${row('Date', ext.date || '—')}
-    ${row('Période', ext.periode || '—')}
-    ${row('Journal', ext.journal || '—')}
-  `;
+  const amtEl = document.getElementById('ext-amount');
+  amtEl.textContent = (isCredit?'−':'+')+abs.toLocaleString('fr-BE',{minimumFractionDigits:2})+' €';
+  amtEl.className = 'ext-amount'+(isCredit?' credit':'');
+  document.getElementById('ext-amount-lbl').textContent = isCredit ? 'crédit (recette)' : 'débit (charge)';
+
+  const fields = [
+    ['Libellé', ext.libelle],
+    ['Commentaire', ext.commentaire||'—'],
+    ['Nom', ext.nom||'—'],
+    ['N°Doc', ext.ndoc||'—'],
+    ['Date', ext.date||'—'],
+    ['Période', ext.periode||'—'],
+    ['Journal', ext.journal||'—'],
+  ];
+  document.getElementById('ext-fields').innerHTML = fields.map(([l,v])=>`
+    <div class="ext-field">
+      <span class="ext-flbl">${l}</span>
+      <span class="ext-fval${l==='N°Doc'?' mono':''}">${v}</span>
+    </div>`).join('');
+
+  const total = extRows.length;
+  const remaining = extRows.filter(e=>!session.processed[e.key]).length;
+  document.getElementById('ext-nav-lbl').textContent = `${curIdx+1}/${total} · ${remaining} restantes`;
+  document.getElementById('nav-prev').disabled = curIdx===0;
+  document.getElementById('nav-next').disabled = curIdx>=total-1;
 
   // Reset split
-  splitMode = false;
-  document.getElementById('splitPanel').classList.remove('open');
-  document.getElementById('splitAmount').value = '';
-  splitRemaining = Math.abs(ext.solde);
-
-  // Update nav
-  document.getElementById('extNavLabel').textContent = `${currentExtIdx + 1} / ${extractionRows.length}`;
-  document.getElementById('navPrev').disabled = currentExtIdx === 0;
-  document.getElementById('navNext').disabled = currentExtIdx >= extractionRows.length - 1;
-
-  // Show hint
-  document.getElementById('clickHint').classList.add('visible');
+  splitMode=false; splitUsed=0;
+  document.getElementById('split-zone').classList.remove('open');
+  document.getElementById('btn-split').classList.remove('active');
+  document.getElementById('split-input').value='';
+  updateSplitUI();
 }
 
-function row(label, value) {
-  return `<div class="ext-row"><span class="ext-label">${label}</span><span class="ext-value">${value}</span></div>`;
-}
-
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 //  ASSIGN
-// ═══════════════════════════════════════════
-function assignToRow(rowIdx) {
-  if (currentExtIdx >= extractionRows.length) return;
-  const ext = extractionRows[currentExtIdx];
-  let amount = Math.abs(ext.solde);
+// ═══════════════════════════
+function assignToRow(rowNum) {
+  if (curIdx >= extRows.length) return;
+  const ext = extRows[curIdx];
+  const fullAbs = Math.abs(ext.solde);
+  const isCredit = ext.solde < 0;
+  let amount;
 
   if (splitMode) {
-    const splitVal = parseFloat(document.getElementById('splitAmount').value);
-    if (isNaN(splitVal) || splitVal <= 0) {
-      showToast('Entrez un montant valide pour le split.', 'warn');
-      return;
-    }
-    if (splitVal > amount + 0.01) {
-      showToast('Le montant du split dépasse le total de la ligne.', 'warn');
-      return;
-    }
-    amount = splitVal;
+    const v = parseFloat(document.getElementById('split-input').value);
+    if (isNaN(v)||v<=0) { showToast('Entrez un montant valide.','warn'); return; }
+    const avail = fullAbs - splitUsed;
+    if (v > avail+0.005) { showToast(`Dépasse le disponible (${fmtN(avail)} €).`,'warn'); return; }
+    amount = v;
+  } else {
+    amount = fullAbs;
   }
 
-  // Add to session assignments
-  if (!session.assignments[rowIdx]) {
-    session.assignments[rowIdx] = { total: 0, ndocs: [] };
-  }
-  session.assignments[rowIdx].total += (ext.solde < 0 ? -amount : amount);
-  if (ext.ndoc && !session.assignments[rowIdx].ndocs.includes(ext.ndoc)) {
-    session.assignments[rowIdx].ndocs.push(ext.ndoc);
-  }
+  const signed = isCredit ? -amount : amount;
+
+  // Update session.rowData
+  if (!session.rowData[rowNum]) session.rowData[rowNum] = { parts:[], ndocs:[] };
+  const rd = session.rowData[rowNum];
+  rd.parts.push({ signed, abs:amount, isCredit });
+  if (ext.ndoc && !rd.ndocs.includes(ext.ndoc)) rd.ndocs.push(ext.ndoc);
 
   if (!splitMode) {
-    // Mark extraction line as processed
-    session.processed[ext.key] = { rowIdx, amount, ndoc: ext.ndoc };
+    markProcessed(ext.key, rowNum, amount, ext.ndoc);
     saveSession();
-    showToast(`✓ ${Math.abs(amount).toLocaleString('fr-BE', {minimumFractionDigits:2})} € → ligne ${rowIdx}`, 'green');
-    currentExtIdx++;
-    refreshTableRow(rowIdx);
-    renderExtractionCard();
-    updateProgress();
+    refreshRow(rowNum);
+    showToast(`✓ ${fmtN(amount)} € → ligne ${rowNum}`,'ok');
+    curIdx++;
+    renderExt();
+    updateProg();
   } else {
-    // Split mode: partial assignment, stay on same line, update remaining
-    splitRemaining = splitRemaining - amount;
-    document.getElementById('splitAmount').value = '';
-    onSplitInput();
-    refreshTableRow(rowIdx);
+    splitUsed += amount;
+    document.getElementById('split-input').value='';
+    updateSplitUI();
+    refreshRow(rowNum);
     saveSession();
-    showToast(`✓ Split: ${amount.toLocaleString('fr-BE', {minimumFractionDigits:2})} € → ligne ${rowIdx}. Reste: ${splitRemaining.toLocaleString('fr-BE', {minimumFractionDigits:2})} €`);
-
-    if (splitRemaining <= 0.01) {
-      session.processed[ext.key] = { rowIdx, amount: Math.abs(ext.solde), ndoc: ext.ndoc };
+    const rem = fullAbs - splitUsed;
+    showToast(`✓ Split: ${fmtN(amount)} € → ligne ${rowNum}. Reste: ${fmtN(rem)} €`);
+    if (rem < 0.005) {
+      markProcessed(ext.key, rowNum, fullAbs, ext.ndoc);
       saveSession();
-      currentExtIdx++;
-      splitMode = false;
-      document.getElementById('splitPanel').classList.remove('open');
-      renderExtractionCard();
-      updateProgress();
+      curIdx++;
+      splitMode=false;
+      document.getElementById('split-zone').classList.remove('open');
+      document.getElementById('btn-split').classList.remove('active');
+      renderExt();
+      updateProg();
     }
   }
 }
 
-function refreshTableRow(rowIdx) {
-  const tr = document.querySelector(`tr[data-rowidx="${rowIdx}"]`);
-  if (!tr) { renderBudgetTable(); return; }
-
-  const assigned = session.assignments[rowIdx];
-  if (!assigned) return;
-
-  tr.classList.add('just-assigned');
-
-  // Update analytique cell
-  const analCell = tr.cells[analytiqueCol];
-  if (analCell) {
-    const row = budgetRows.find(r => r.rowIdx === rowIdx);
-    const base = row ? (typeof row.cells[analytiqueCol]?.v === 'number' ? row.cells[analytiqueCol].v : 0) : 0;
-    analCell.textContent = fmtNum(base + assigned.total);
-    analCell.style.background = '#FFFBEA';
-    setTimeout(() => analCell.style.background = '', 800);
-  }
-
-  // Update factures cell
-  const factCell = tr.cells[facturesCol];
-  if (factCell) {
-    factCell.textContent = assigned.ndocs.join(' | ');
-  }
-
-  // Scroll into view briefly
-  tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  tr.classList.add('targeted');
-  setTimeout(() => tr.classList.remove('targeted'), 1200);
+function markProcessed(key, rowNum, amount, ndoc) {
+  if (!session.processed[key]) session.processed[key] = { skipped:false, assignments:[] };
+  session.processed[key].assignments.push({ rowNum, amount, ndoc });
 }
 
-// ═══════════════════════════════════════════
-//  SKIP / SPLIT / NAV
-// ═══════════════════════════════════════════
+function refreshRow(rowNum) {
+  const tr = document.querySelector(`tr[data-rn="${rowNum}"]`);
+  if (!tr) return;
+  const rd = session.rowData[rowNum];
+  if (!rd) return;
+  tr.classList.add('assigned');
+
+  const aC = bMeta.analCol, fC = bMeta.factCol;
+  const row = bMeta.rows.find(r=>r.rowNum===rowNum);
+  const base = row ? (typeof row.cells[aC]?.v==='number' ? row.cells[aC].v : 0) : 0;
+  const total = base + rd.parts.reduce((s,p)=>s+p.signed,0);
+
+  const analCell = tr.cells[aC];
+  if (analCell) { analCell.textContent=fmtN(total); analCell.classList.add('filled'); }
+  const factCell = tr.cells[fC];
+  if (factCell) factCell.textContent = rd.ndocs.join(' | ');
+
+  tr.classList.add('flash');
+  setTimeout(()=>tr.classList.remove('flash'),700);
+  tr.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ═══════════════════════════
+//  SKIP
+// ═══════════════════════════
 function skipLine() {
-  if (currentExtIdx >= extractionRows.length) return;
-  const ext = extractionRows[currentExtIdx];
-  session.processed[ext.key] = { skipped: true };
+  if (curIdx >= extRows.length) return;
+  const ext = extRows[curIdx];
+  session.processed[ext.key] = { skipped:true, assignments:[] };
   saveSession();
-  currentExtIdx++;
-  renderExtractionCard();
-  updateProgress();
+  curIdx++;
+  renderExt();
+  updateProg();
   showToast('⏩ Ligne passée');
 }
 
+// ═══════════════════════════
+//  SPLIT
+// ═══════════════════════════
 function toggleSplit() {
   splitMode = !splitMode;
-  const panel = document.getElementById('splitPanel');
-  panel.classList.toggle('open', splitMode);
-  if (splitMode && currentExtIdx < extractionRows.length) {
-    splitRemaining = Math.abs(extractionRows[currentExtIdx].solde);
-    document.getElementById('splitRemaining').textContent = `Reste à affecter : ${splitRemaining.toLocaleString('fr-BE', {minimumFractionDigits:2})} €`;
-    document.getElementById('splitAmount').focus();
-  }
+  document.getElementById('split-zone').classList.toggle('open',splitMode);
+  document.getElementById('btn-split').classList.toggle('active',splitMode);
+  if (splitMode) { document.getElementById('split-input').focus(); updateSplitUI(); }
 }
 
-function onSplitInput() {
-  if (currentExtIdx >= extractionRows.length) return;
-  const total = Math.abs(extractionRows[currentExtIdx].solde);
-  const val = parseFloat(document.getElementById('splitAmount').value) || 0;
-  const remaining = total - val;
-  const el = document.getElementById('splitRemaining');
-  el.textContent = `Reste à affecter : ${remaining.toLocaleString('fr-BE', {minimumFractionDigits:2})} €`;
-  el.classList.toggle('warn', remaining < 0);
+function onSplitInput() { updateSplitUI(); }
+
+function updateSplitUI() {
+  if (curIdx >= extRows.length) return;
+  const fullAbs = Math.abs(extRows[curIdx].solde);
+  const avail = fullAbs - splitUsed;
+  const inputVal = parseFloat(document.getElementById('split-input').value) || 0;
+  const afterInput = avail - inputVal;
+
+  const el = document.getElementById('split-rem');
+  el.textContent = fmtN(afterInput)+' €';
+  el.className = 'srv'+(afterInput<-0.005?' over':afterInput<0.005?' done':'');
+
+  const alreadyEl = document.getElementById('split-already');
+  alreadyEl.textContent = splitUsed > 0 ? `Déjà affecté : ${fmtN(splitUsed)} €  ·  Disponible : ${fmtN(avail)} €` : '';
 }
 
-function navExtraction(dir) {
-  const newIdx = currentExtIdx + dir;
-  if (newIdx < 0 || newIdx >= extractionRows.length) return;
-  currentExtIdx = newIdx;
-  renderExtractionCard();
+// ═══════════════════════════
+//  NAV
+// ═══════════════════════════
+function navExt(dir) {
+  const ni = curIdx+dir;
+  if (ni<0||ni>=extRows.length) return;
+  curIdx=ni; renderExt();
 }
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 //  PROGRESS
-// ═══════════════════════════════════════════
-function updateProgress() {
-  const total = extractionRows.length;
-  const done = Object.keys(session.processed).length;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-  document.getElementById('progressLabel').textContent = `Ligne ${done} / ${total}`;
-  document.getElementById('progressFill').style.width = pct + '%';
-  document.getElementById('progressPct').textContent = pct + '%';
+// ═══════════════════════════
+function updateProg() {
+  const total=extRows.length, done=Object.keys(session.processed).length;
+  const pct=total>0?Math.round(done/total*100):0;
+  document.getElementById('prog-label').textContent=`${done} / ${total} lignes traitées`;
+  document.getElementById('prog-fill').style.width=pct+'%';
+  document.getElementById('prog-pct').textContent=pct+'%';
 }
 
-// ═══════════════════════════════════════════
-//  EXPORT EXCEL
-// ═══════════════════════════════════════════
+// ═══════════════════════════
+//  EXPORT (format-preserving)
+// ═══════════════════════════
 function exportBudget() {
-  if (!budgetWb) { showToast('Aucun fichier budget chargé.', 'warn'); return; }
+  if (!budgetWb) { showToast('Aucun fichier budget chargé.','warn'); return; }
 
-  const ws = budgetWb.Sheets[budgetWb.SheetNames[0]];
+  // Re-read the raw bytes from the workbook to clone it faithfully
+  const wbBytes = XLSX.write(budgetWb, { type:'array', bookType:'xlsx', cellStyles:true });
+  const wbCopy = XLSX.read(wbBytes, { type:'array', cellStyles:true, cellNF:true });
+  const ws = wbCopy.Sheets[wbCopy.SheetNames[0]];
   const range = XLSX.utils.decode_range(ws['!ref']);
+  const aC=bMeta.analCol, fC=bMeta.factCol, hR=bMeta.headerRow;
 
-  // Extend range if facturesCol beyond current max
-  if (facturesCol > range.e.c) {
-    range.e.c = facturesCol;
-    ws['!ref'] = XLSX.utils.encode_range(range);
-  }
+  // Extend range for new column
+  if (fC > range.e.c) { range.e.c=fC; ws['!ref']=XLSX.utils.encode_range(range); }
 
-  // Find header row to write factures header
-  let headerRow = -1;
-  for (let r = range.s.r; r <= range.e.r; r++) {
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const cell = ws[XLSX.utils.encode_cell({r, c})];
-      if (cell && cell.v && String(cell.v).toUpperCase().includes('ANALYTIQUE')) {
-        headerRow = r;
-        break;
-      }
-    }
-    if (headerRow >= 0) break;
-  }
+  // Column width for new col
+  if (!ws['!cols']) ws['!cols']=[];
+  while (ws['!cols'].length<=fC) ws['!cols'].push(null);
+  ws['!cols'][fC]={ wch:30 };
 
-  // Write header for factures col
-  if (headerRow >= 0) {
-    const hAddr = XLSX.utils.encode_cell({r: headerRow, c: facturesCol});
-    ws[hAddr] = { v: 'N° Factures', t: 's', s: { bold: true } };
-  }
+  // Add header for new col (copy style from neighbour)
+  const hAddr = XLSX.utils.encode_cell({r:hR, c:fC});
+  const srcH = ws[XLSX.utils.encode_cell({r:hR, c:fC-1})];
+  ws[hAddr] = { v:'N° Factures', t:'s', s: srcH ? JSON.parse(JSON.stringify(srcH.s||{})) : {bold:true} };
 
-  // Apply all session assignments
-  Object.entries(session.assignments).forEach(([rowIdxStr, asgn]) => {
-    const r = parseInt(rowIdxStr);
+  // Apply session data to each assigned row
+  Object.entries(session.rowData).forEach(([rowNumStr, rd]) => {
+    const r = parseInt(rowNumStr)-1; // 0-based
 
-    // Update ANALYTIQUE cell (I col)
-    const analAddr = XLSX.utils.encode_cell({r, c: analytiqueCol});
-    const existing = ws[analAddr];
-    let baseVal = 0;
-    if (existing) {
-      if (existing.f) {
-        // Keep the formula — we'll store a new value in a separate approach:
-        // Actually we need to add to existing numeric value.
-        // Since formulas are unresolved strings, we just write the numeric sum.
-        baseVal = typeof existing.v === 'number' ? existing.v : 0;
-      } else {
-        baseVal = typeof existing.v === 'number' ? existing.v : (parseFloat(existing.v) || 0);
-      }
-    }
+    // ── ANALYTIQUE: write as formula =part1+part2+... ──
+    const analAddr = XLSX.utils.encode_cell({r, c:aC});
+    const existCell = ws[analAddr] || {};
+    const baseVal = typeof existCell.v === 'number' ? existCell.v : 0;
 
-    const newVal = baseVal + asgn.total;
-    ws[analAddr] = { v: newVal, t: 'n', z: '#,##0.00' };
+    // Parts from session
+    const parts = rd.parts || [];
+    const formulaParts = [];
+    if (baseVal !== 0) formulaParts.push(fmtFml(Math.abs(baseVal))+(baseVal<0?'*-1':''));
+    parts.forEach(p => formulaParts.push(fmtFml(p.abs)+(p.isCredit?'*-1':'')));
 
-    // Write factures col
-    const factAddr = XLSX.utils.encode_cell({r, c: facturesCol});
-    const existingFact = ws[factAddr];
-    let existingNdocs = [];
-    if (existingFact && existingFact.v) {
-      existingNdocs = String(existingFact.v).split(FACTURE_SEP).map(s => s.trim()).filter(Boolean);
-    }
-    const allNdocs = [...new Set([...existingNdocs, ...asgn.ndocs])];
-    ws[factAddr] = { v: allNdocs.join(' ' + FACTURE_SEP + ' '), t: 's' };
+    const formula = formulaParts.length > 0 ? formulaParts.join('+') : '0';
+    const total = baseVal + parts.reduce((s,p)=>s+p.signed,0);
+
+    ws[analAddr] = {
+      t:'n', f:formula, v:total,
+      z: existCell.z || '#,##0.00\\ "€"',
+      s: existCell.s ? JSON.parse(JSON.stringify(existCell.s)) : {}
+    };
+
+    // ── FACTURES: pipe-separated ndocs ──
+    const factAddr = XLSX.utils.encode_cell({r, c:fC});
+    const existFact = ws[factAddr];
+    let existNdocs = [];
+    if (existFact && existFact.v) existNdocs = String(existFact.v).split(SEP).map(s=>s.trim()).filter(Boolean);
+    const allNdocs = [...new Set([...existNdocs, ...rd.ndocs])];
+
+    const srcFact = ws[XLSX.utils.encode_cell({r, c:fC-1})];
+    ws[factAddr] = {
+      v: allNdocs.join(' '+SEP+' '), t:'s',
+      s: srcFact && srcFact.s ? JSON.parse(JSON.stringify(srcFact.s)) : {}
+    };
   });
 
-  // Download
-  const filename = `budget_analytique_${new Date().toISOString().slice(0,10)}.xlsx`;
-  XLSX.writeFile(budgetWb, filename);
-  showToast('✓ Budget exporté : ' + filename, 'green');
+  const fname = `budget_analytique_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.writeFile(wbCopy, fname, { cellStyles:true, bookType:'xlsx' });
+  showToast('✓ Exporté : '+fname,'ok');
 }
 
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 //  DONE
-// ═══════════════════════════════════════════
+// ═══════════════════════════
 function showDone() {
-  document.getElementById('screen-main').classList.remove('active');
-  document.getElementById('screen-done').classList.add('active');
+  show('done');
+  const skipped = extRows.filter(e=>session.processed[e.key]?.skipped);
+  const box = document.getElementById('skipped-box');
+  if (skipped.length > 0) {
+    box.style.display='block';
+    document.getElementById('skipped-items').innerHTML = skipped.map(e=>`
+      <div class="skipped-item">
+        <div class="si-desc"><div class="main">${e.libelle||'—'}</div><div class="sub">${e.commentaire||''}</div></div>
+        <span class="si-ndoc">${e.ndoc}</span>
+        <span class="si-amt">${fmtN(Math.abs(e.solde))} €</span>
+      </div>`).join('');
+  } else box.style.display='none';
 }
 
-// ═══════════════════════════════════════════
-//  TOAST
-// ═══════════════════════════════════════════
-let toastTimer;
+// ═══════════════════════════
+//  UTILS
+// ═══════════════════════════
+function show(name) {
+  ['screen-upload','screen-main','screen-done'].forEach(id=>{
+    const el=document.getElementById(id);
+    const active = id==='screen-'+name;
+    el.style.display = active ? (name==='main'?'grid':'flex') : 'none';
+  });
+}
+
+let toastT;
 function showToast(msg, type) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = 'toast show' + (type === 'green' ? ' green' : '');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.className='toast show'+(type==='ok'?' ok':'');
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>el.classList.remove('show'),3400);
 }
 </script>
 </body>
