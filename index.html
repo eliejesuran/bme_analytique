@@ -47,9 +47,12 @@
   .ucard p{font-size:11px;color:var(--muted)}
   .ucard .fn{margin-top:8px;font-size:11px;font-family:'DM Mono',monospace;color:var(--accent);font-weight:500;word-break:break-all}
   .snote{font-size:12px;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-family:'DM Mono',monospace;text-align:center;max-width:600px;width:100%}
+  .ubtnrow{display:flex;gap:12px;align-items:center}
   #btnStart{display:none;background:var(--accent);color:#fff;border:none;padding:13px 36px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif}
   #btnStart:hover{background:#234820}
   #btnStart.v{display:inline-block}
+  #btnReset{background:transparent;color:var(--muted);border:1px solid var(--border-strong);padding:12px 20px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif}
+  #btnReset:hover{background:var(--border);color:var(--text)}
 
   /* MAIN */
   #sm{padding:20px;display:grid;grid-template-rows:auto 1fr;gap:16px}
@@ -87,6 +90,8 @@
   /* SPLIT */
   .splitzone{display:none;padding:14px 18px;border-top:1px solid var(--border);background:var(--split-light)}
   .splitzone.open{display:block}
+  .split-warn{background:#FFF3CD;border:1px solid #FFD966;border-radius:6px;padding:8px 12px;font-size:11px;color:#7A5800;margin-bottom:10px;display:flex;gap:6px;align-items:flex-start;line-height:1.5}
+  .split-warn .wi{flex-shrink:0;font-size:13px}
   .splitzone>label{font-size:11px;font-weight:600;color:var(--split);display:block;margin-bottom:8px}
   .splitzone input[type=number]{width:100%;padding:8px 12px;border:1px solid #BAD0EF;border-radius:6px;font-family:'DM Mono',monospace;font-size:15px;background:#fff}
   .srem-bar{margin-top:8px;display:flex;justify-content:space-between;align-items:center;font-family:'DM Mono',monospace;font-size:12px;background:#fff;border:1px solid #BAD0EF;border-radius:6px;padding:6px 12px}
@@ -194,7 +199,10 @@
     </div>
   </div>
   <div class="snote" id="snote">💾 La session est sauvegardée automatiquement dans le navigateur.</div>
-  <button id="btnStart" onclick="startSession()">▶ Démarrer la session</button>
+  <div class="ubtnrow">
+    <button id="btnStart" onclick="startSession()">▶ Démarrer la session</button>
+    <button id="btnReset" onclick="resetAll()">↺ Réinitialiser</button>
+  </div>
 </div>
 
 <!-- MAIN -->
@@ -220,6 +228,7 @@
       </div>
       <div class="efields" id="efields"></div>
       <div class="splitzone" id="sz">
+        <div class="split-warn"><span class="wi">⚠️</span><span>En mode split, la formule dans la colonne Analytique sera plus complexe et plus difficile à modifier manuellement par la suite. À utiliser avec précaution.</span></div>
         <label>Montant partiel à affecter (€)</label>
         <input type="number" id="sinput" step="0.01" min="0.01" placeholder="0.00" oninput="onSplit()">
         <div class="srem-bar">
@@ -544,11 +553,14 @@ function renderBudget() {
       else td.classList.add('nc');
 
       if(isF) {
-        td.textContent=rd?rd.ndocs.join(' | '):(cell.v!=null?String(cell.v||''):'');
+        td.textContent=rd?mergeDocs(existingDocsForRow(row.rowNum), rd.ndocs).join(' | '):(cell.v!=null?String(cell.v||''):'');
       } else if(isA) {
         if(rd){
-          const base=typeof cell.v==='number'?cell.v:0;
-          td.textContent=fmt(base+rd.parts.reduce((s,p)=>s+p.signed,0));
+          const add=rd.parts.reduce((s,p)=>s+p.signed,0);
+          if(typeof cell.v==='number') td.textContent=fmt(cell.v+add);
+          else if(cell.f) td.textContent='='+cell.f+' + '+fmt(add);
+          else if(typeof cell.v==='string' && cell.v.trim().startsWith('=')) td.textContent=cell.v+' + '+fmt(add);
+          else td.textContent=fmt(add);
           td.classList.add('ok');
         } else td.textContent=cell.v!=null?fmtCell(cell):'';
       } else td.textContent=cell.v!=null?fmtCell(cell):'';
@@ -564,6 +576,22 @@ function fmtCell(c) {
   return String(c.v);
 }
 function fmt(n){n=parseFloat(n)||0;if(n===0)return '0';return n.toLocaleString('fr-BE',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function mergeDocs(existing, added){
+  const out=[];
+  [...(existing||[]), ...(added||[])].forEach(v=>{
+    v=String(v||'').trim();
+    if(v && !out.includes(v)) out.push(v);
+  });
+  return out;
+}
+function existingDocsForRow(rowNum){
+  const row=bMeta.rows.find(r=>r.rowNum===rowNum);
+  if(!row) return [];
+  const cell=row.cells[bMeta.factCol]||{};
+  const val=cell.v!=null?String(cell.v).trim():'';
+  if(!val || val.startsWith('=')) return [];
+  return val.split('|').map(x=>x.trim()).filter(Boolean);
+}
 
 // ═══════════════════════════════════════════
 //  EXTRACTION CARD
@@ -657,7 +685,7 @@ function refreshRow(rowNum){
   const ac=tr.cells[bMeta.analCol];
   if(ac){ac.textContent=fmt(total);ac.classList.add('ok');}
   const fc=tr.cells[bMeta.factCol];
-  if(fc) fc.textContent=rd.ndocs.join(' | ');
+  if(fc) fc.textContent=mergeDocs(existingDocsForRow(rowNum), rd.ndocs).join(' | ');
   tr.classList.add('flash');
   setTimeout(()=>tr.classList.remove('flash'),700);
   tr.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -754,6 +782,55 @@ def run(excel_b64, assignments_json):
             dst.alignment = copy.copy(src.alignment)
             dst.number_format = src.number_format
 
+    def unique_keep_order(values):
+        out = []
+        seen = set()
+        for v in values:
+            v = str(v or '').strip()
+            if v and v not in seen:
+                seen.add(v)
+                out.append(v)
+        return out
+
+    def split_ndocs(value):
+        if value is None:
+            return []
+        txt = str(value).strip()
+        # Ne jamais traiter une formule comme une liste de factures.
+        if not txt or txt.startswith('='):
+            return []
+        return [x.strip() for x in txt.split('|') if x.strip()]
+
+    def existing_formula_part(value):
+        # Préserve ce qui existe déjà dans Analytique : nombre, formule ou nombre stocké en texte.
+        if value is None or value == '':
+            return None
+        if isinstance(value, (int, float)):
+            if abs(value) < 0.0000001:
+                return None
+            return f'{float(value):.2f}'
+
+        txt = str(value).strip()
+        if not txt:
+            return None
+        if txt.startswith('='):
+            return '(' + txt[1:] + ')'
+
+        # Convertit prudemment les nombres texte FR/BE : 1.234,56 ou 1234,56
+        cleaned = txt.replace('€', '').replace(' ', '').replace('\\u00a0', '')
+        if ',' in cleaned and '.' in cleaned:
+            cleaned = cleaned.replace('.', '').replace(',', '.')
+        elif ',' in cleaned:
+            cleaned = cleaned.replace(',', '.')
+        try:
+            num = float(cleaned)
+            if abs(num) < 0.0000001:
+                return None
+            return f'{num:.2f}'
+        except Exception:
+            # Valeur texte non numérique : on la laisse intacte, sans l'écraser.
+            return None
+
     # Add N° Factures header wherever col (fact_col-1) has a label
     for r in range(1, ws.max_row + 1):
         src = ws.cell(row=r, column=fact_col - 1)
@@ -763,6 +840,9 @@ def run(excel_b64, assignments_json):
         # Header rows: has 'Commentaire' or mirrors it with a formula
         if 'commentaire' in sv.lower() or sv == '=M17' or sv.startswith('=M'):
             dst = ws.cell(row=r, column=fact_col)
+            # IMPORTANT : ne pas écraser une cellule N qui contient déjà des N°Doc.
+            if dst.value and r != header_row:
+                continue
             if sv.startswith('='):
                 fact_col_letter = openpyxl.utils.get_column_letter(fact_col)
                 ref_row = src.value[2:]  # e.g. '17' from '=M17'
@@ -787,29 +867,36 @@ def run(excel_b64, assignments_json):
         parts = rd.get('parts', [])
         ndocs = rd.get('ndocs', [])
 
-        # Analytique cell
+        # Analytique cell : conserver l'existant, puis ajouter les nouveaux montants.
         ic = ws.cell(row=rn, column=anal_col)
-        base = ic.value if isinstance(ic.value, (int, float)) else 0
+        existing_part = existing_formula_part(ic.value)
 
         fp = []
-        if base != 0:
-            fp.append(f'{abs(base):.2f}' + ('*-1' if base < 0 else ''))
+        if existing_part:
+            fp.append(existing_part)
         for p in parts:
-            fp.append(f'{p["abs"]:.2f}' + ('*-1' if p["isCr"] else ''))
+            amt = float(p.get('abs', 0) or 0)
+            if amt == 0:
+                continue
+            fp.append(f'{amt:.2f}' + ('*-1' if p.get('isCr') else ''))
 
         if fp:
             ic.value = '=' + '+'.join(fp)
         if not ic.number_format or ic.number_format == 'General':
-            ic.number_format = '#,##0.00\\\\ "€"'
+            ic.number_format = '#,##0.00\\ "€"'
 
-        # Factures cell
+        # Factures cell : fusionner l'existant et les nouveaux N°Doc, sans écraser.
         nc = ws.cell(row=rn, column=fact_col)
         mc = ws.cell(row=rn, column=fact_col - 1)
 
-        existing = str(nc.value or '').strip()
-        ex_ndocs = [x.strip() for x in existing.split('|') if x.strip()] if existing else []
-        all_ndocs = list(dict.fromkeys(ex_ndocs + ndocs))
-        nc.value = ' | '.join(all_ndocs)
+        existing_value = nc.value
+        existing_ndocs = split_ndocs(existing_value)
+        all_ndocs = unique_keep_order(existing_ndocs + ndocs)
+
+        if all_ndocs:
+            nc.value = ' | '.join(all_ndocs)
+        elif existing_value is not None:
+            nc.value = existing_value
         cp_style(mc, nc)
 
     out = io.BytesIO()
