@@ -183,7 +183,7 @@
       <span id="hdrLogoPlaceholder" style="font-size:11px;color:#555;font-family:'DM Mono',monospace;border:1px dashed #444;padding:4px 8px;border-radius:4px;white-space:nowrap">+ Logo</span>
       <input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="loadLogo(this)">
     </label>
-    <div><h1>ANALYTIQUE ↔ BUDGET</h1><div class="sub">Outil de mise à jour budgétaire</div></div>
+    <div><h1 id="appTitle">ANALYTIQUE ↔ BUDGET</h1><div class="sub">Outil de mise à jour budgétaire</div></div>
   </div>
   <div id="badge">—</div>
 </header>
@@ -360,6 +360,7 @@ function loadFile(type, input) {
       budgetBytes = bytes;
       budgetWb = XLSX.read(bytes, { type:'array', cellStyles:true, cellNF:true });
       parseBudget();
+      updateEventTitleFromBudget();
       // Detect already-processed ndocs from col N of the budget file
       detectAlreadyProcessed(bytes);
       document.getElementById('fnb').textContent = file.name;
@@ -402,6 +403,26 @@ function detectAlreadyProcessed(bytes) {
   // We'll apply this after extRows are loaded, in startSession
   S._alreadyProcessedNdocs = [...processedNdocs];
   console.log('Already processed N°Docs in budget file:', processedNdocs);
+}
+
+
+function cellText(ws, addr) {
+  const cell = ws[addr];
+  if (!cell) return '';
+  const val = cell.w !== undefined ? cell.w : cell.v;
+  return String(val || '').trim();
+}
+
+function updateEventTitleFromBudget() {
+  try {
+    const ws = budgetWb && budgetWb.Sheets[budgetWb.SheetNames[0]];
+    if (!ws) return;
+    const title = cellText(ws, 'A3') || cellText(ws, 'E4');
+    const el = document.getElementById('appTitle');
+    if (el) el.textContent = title ? title : 'ANALYTIQUE ↔ BUDGET';
+  } catch(e) {
+    console.warn('Titre événement non détecté', e);
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -965,35 +986,56 @@ function updateProg(){
 //  EXPORT via Pyodide + openpyxl
 // ═══════════════════════════════════════════
 let pyodide = null;
-let pyodideLoading = false;
+let pyodideReadyPromise = null;
 
 async function loadPyodide() {
+  // Une seule promesse partagée : les deux boutons attendent exactement le même chargement.
   if (pyodide) return pyodide;
-  if (pyodideLoading) return null;
-  pyodideLoading = true;
+  if (pyodideReadyPromise) return pyodideReadyPromise;
 
-  // Load Pyodide script
-  await new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-    s.onload = res; s.onerror = rej;
-    document.head.appendChild(s);
-  });
+  pyodideReadyPromise = (async () => {
+    if (!window.loadPyodide) {
+      await new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+        s.onload = res;
+        s.onerror = () => rej(new Error('Impossible de charger Pyodide. Vérifiez la connexion internet.'));
+        document.head.appendChild(s);
+      });
+    }
 
-  pyodide = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
-  await pyodide.loadPackage('micropip');
-  await pyodide.runPythonAsync(`
+    const py = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
+    await py.loadPackage('micropip');
+
+    await py.runPythonAsync(`
 import micropip
-await micropip.install('openpyxl')
+await micropip.install(['openpyxl', 'pillow'], keep_going=True)
+import openpyxl
+try:
+    import PIL
+except Exception:
+    pass
 print('openpyxl ready')
-  `);
-  return pyodide;
+    `);
+
+    pyodide = py;
+    return pyodide;
+  })();
+
+  try {
+    return await pyodideReadyPromise;
+  } catch (e) {
+    pyodideReadyPromise = null;
+    pyodide = null;
+    throw e;
+  }
 }
 
 const PY_EXPORT = `
 import openpyxl, copy, io, json, base64
+from openpyxl.drawing.image import Image as XLImage
 
-def run(excel_b64, assignments_json):
+def run(excel_b64, assignments_json, logo_b64=None):
     excel_bytes = base64.b64decode(excel_b64)
     asgn = json.loads(assignments_json)
     row_data = asgn['rowData']
@@ -1004,6 +1046,18 @@ def run(excel_b64, assignments_json):
     buf = io.BytesIO(excel_bytes)
     wb = openpyxl.load_workbook(buf)
     ws = wb.active
+
+    # Logo : si un fichier logo.png est trouvé à côté de l'outil HTML,
+    # l'insérer en haut à gauche du fichier Excel sans bloquer l'export si absent.
+    if logo_b64:
+        try:
+            logo_bytes = base64.b64decode(logo_b64)
+            logo_img = XLImage(io.BytesIO(logo_bytes))
+            logo_img.width = 118
+            logo_img.height = 81
+            ws.add_image(logo_img, 'A1')
+        except Exception as e:
+            print('Logo non inséré:', e)
 
     def cp_style(src, dst):
         if src.has_style:
@@ -1135,13 +1189,47 @@ def run(excel_b64, assignments_json):
     out.seek(0)
     return base64.b64encode(out.read()).decode()
 
-result = run(excel_b64, assignments_json)
+result = run(excel_b64, assignments_json, logo_b64)
 result
 `;
 
+
+let cachedLogoB64 = null;
+
+async function loadLogoPngBase64() {
+  if (cachedLogoB64 !== null) return cachedLogoB64;
+  // 1) Priorité : logo.png placé à côté du fichier HTML.
+  // Note : certains navigateurs bloquent fetch('logo.png') quand l'outil est ouvert en file://.
+  try {
+    const response = await fetch('logo.png', { cache: 'no-store' });
+    if (response.ok) {
+      const blob = await response.blob();
+      return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => { cachedLogoB64 = String(reader.result).split(',')[1] || ''; resolve(cachedLogoB64); };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch(e) {
+    console.warn('logo.png introuvable ou inaccessible depuis ce navigateur', e);
+  }
+
+  // 2) Secours : logo chargé via le bouton + Logo du bandeau.
+  try {
+    const savedLogo = localStorage.getItem('hdr_logo') || '';
+    if (savedLogo.startsWith('data:image/')) { cachedLogoB64 = savedLogo.split(',')[1] || ''; return cachedLogoB64; }
+  } catch(e) {}
+
+  cachedLogoB64 = '';
+  return '';
+}
+
 async function exportExcel() {
   if (!budgetBytes) { toast('Aucun fichier budget chargé.','warn'); return; }
-  if (Object.keys(S.rowData).length === 0) { toast('Aucune affectation à exporter.','warn'); return; }
+  // Même sans nouvelle affectation, on autorise l'export :
+  // utile pour télécharger le budget déjà chargé, préserver les N°Docs/formules existants,
+  // et insérer le logo/titre dans le fichier final.
 
   // Disable buttons
   ['btnExp','btnDl'].forEach(id=>{ const el=document.getElementById(id); if(el){el.disabled=true;el.textContent='⏳ En cours…';} });
@@ -1152,19 +1240,23 @@ async function exportExcel() {
     ovMsg.innerHTML = 'Chargement de Python dans le navigateur…<br><em>(une seule fois, ~15 secondes)</em>';
 
     const py = await loadPyodide();
+    if (!py) throw new Error('Pyodide n’est pas prêt. Relancez l’export.');
     ovMsg.innerHTML = 'Génération du fichier Excel…';
 
-    // Chunked base64 encoding to avoid call stack overflow on large files
-    function uint8ToBase64(bytes) {
-      let binary = '';
-      const chunkSize = 8192;
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        const chunk = bytes.subarray(i, i + chunkSize);
-        binary += String.fromCharCode(...chunk);
-      }
-      return btoa(binary);
+    // Conversion base64 robuste : évite String.fromCharCode(...grosTableau),
+    // qui peut déclencher « Maximum call stack size exceeded » sur certains navigateurs.
+    function blobToBase64(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = String(reader.result || '');
+          resolve(dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
     }
-    const b64 = uint8ToBase64(budgetBytes);
+    const b64 = await blobToBase64(new Blob([budgetBytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
 
     const assignmentsJson = JSON.stringify({
       rowData: S.rowData,
@@ -1173,16 +1265,29 @@ async function exportExcel() {
       headerRow: bMeta.headerRow
     });
 
+    ovMsg.innerHTML = 'Recherche de logo.png puis génération du fichier Excel…';
+    const logoB64 = await loadLogoPngBase64();
+
     // Run Python
     py.globals.set('excel_b64', b64);
     py.globals.set('assignments_json', assignmentsJson);
+    py.globals.set('logo_b64', logoB64);
     const resultB64 = await py.runPythonAsync(PY_EXPORT);
 
-    // Download
-    const binStr = atob(resultB64);
-    const bytes = new Uint8Array(binStr.length);
-    for (let i=0;i<binStr.length;i++) bytes[i]=binStr.charCodeAt(i);
-    const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    // Download : décodage par blocs pour éviter les pics mémoire/stack sur gros fichiers.
+    function base64ToBlob(b64, mime) {
+      const byteChars = atob(b64);
+      const sliceSize = 32768;
+      const byteArrays = [];
+      for (let offset = 0; offset < byteChars.length; offset += sliceSize) {
+        const slice = byteChars.slice(offset, offset + sliceSize);
+        const nums = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) nums[i] = slice.charCodeAt(i);
+        byteArrays.push(new Uint8Array(nums));
+      }
+      return new Blob(byteArrays, { type: mime });
+    }
+    const blob = base64ToBlob(resultB64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href=url; a.download=`budget_analytique_${new Date().toISOString().slice(0,10)}.xlsx`;
