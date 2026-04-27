@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Analytique ↔ Budget</title>
+<title>Analytique ↔ Budget — v8 affichage factures</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -107,6 +107,9 @@
   .btn-spl{flex:1;background:var(--split-light);color:var(--split);border:1px solid #BAD0EF;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif}
   .btn-spl.on{background:var(--split);color:#fff;border-color:var(--split)}
   .btn-spl:hover:not(.on){background:#DDE8F7}
+  .btn-undo{background:#F5F0E4;color:#5A4A1A;border:1px solid #D4C89A;padding:8px 12px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;flex-shrink:0;white-space:nowrap;font-family:'DM Sans',sans-serif}
+  .btn-undo:hover:not(:disabled){background:#EDE5CC}
+  .btn-undo:disabled{opacity:.35;cursor:not-allowed}
 
   /* BUDGET TABLE */
   .bpanel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--sh)}
@@ -114,20 +117,24 @@
   .chint.v{display:block}
   .bwrap{overflow:auto;max-height:calc(100vh - 170px)}
 
-  table.bt{width:100%;border-collapse:collapse;font-size:11px}
+  table.bt{min-width:100%;width:max-content;border-collapse:collapse;font-size:11px;table-layout:auto}
   table.bt thead{position:sticky;top:0;z-index:10}
   table.bt th{background:#1A1916;color:#fff;padding:7px 9px;text-align:left;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;border-right:1px solid rgba(255,255,255,.07);font-weight:500;cursor:pointer;user-select:none}
-  table.bt th:hover{background:#333}
-  table.bt th.col-hidden, table.bt td.col-hidden{width:18px!important;min-width:18px!important;max-width:18px!important;padding-left:3px!important;padding-right:3px!important;overflow:hidden!important;color:transparent!important;white-space:nowrap!important}
-  table.bt th.col-hidden::after{content:'↔';color:#fff;font-size:10px}
-  table.bt td.col-hidden *{display:none!important}
+  table.bt th:hover{background:#2E2C28}
+  table.bt th.col-hidden{background:#3A3632;color:#AAA;font-style:normal;width:22px!important;min-width:22px!important;max-width:22px!important;padding:7px 3px!important;text-align:center!important}
+  table.bt td.col-hidden{width:22px!important;min-width:22px!important;max-width:22px!important;padding-left:0!important;padding-right:0!important;overflow:hidden!important;white-space:nowrap!important;color:transparent!important;font-size:0!important;border-right:1px solid var(--border)!important}
+  table.bt col.col-hidden-col{width:22px!important;min-width:22px!important;max-width:22px!important}
+  table.bt col.col-fact{width:220px;min-width:180px;max-width:240px}
+  table.bt col.col-label{width:230px;min-width:180px;max-width:260px}
+  table.bt col.col-anal{width:110px;min-width:95px;max-width:130px}
   table.bt td{padding:5px 9px;border-bottom:1px solid var(--border);border-right:1px solid #EBEBEB;white-space:nowrap}
   table.bt td.lc{white-space:normal;min-width:160px;max-width:250px}
   table.bt td.nc{font-family:'DM Mono',monospace;text-align:right}
   table.bt td.ac{font-family:'DM Mono',monospace;text-align:right;font-weight:600;color:var(--warn)}
   table.bt td.ac.ok{background:#FFF8F0;color:var(--warn)}
-  table.bt td.fc{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);max-width:160px;white-space:normal;word-break:break-all;line-height:1.5}
-  table.bt td.formula-warn{background:#FFE6E6!important;color:#9B1C1C!important;font-weight:700}
+  table.bt td.fc{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);width:220px;min-width:180px;max-width:240px;white-space:normal;word-break:normal;overflow-wrap:break-word;line-height:1.35;vertical-align:top}
+  table.bt td.fc .fc-wrap{display:block;max-width:220px;max-height:4.2em;overflow:hidden;white-space:normal;line-height:1.35}
+  table.bt td.fc .fc-wrap:hover{max-height:none;overflow:visible;background:rgba(255,255,255,.92);position:relative;z-index:20}
 
   tr.rh td{background:#D4EAF3;font-weight:700;font-size:11px}
   tr.rs td{background:#CEDBE6;font-weight:700}
@@ -178,12 +185,13 @@
 
 <header class="hdr">
   <div class="hdr-left">
-    <label title="Cliquer pour charger votre logo" style="cursor:pointer;position:relative">
-      <img id="hdrLogo" class="hdr-logo" src="" alt="Logo">
-      <span id="hdrLogoPlaceholder" style="font-size:11px;color:#555;font-family:'DM Mono',monospace;border:1px dashed #444;padding:4px 8px;border-radius:4px;white-space:nowrap">+ Logo</span>
-      <input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="loadLogo(this)">
-    </label>
-    <div><h1 id="appTitle">ANALYTIQUE ↔ BUDGET</h1><div class="sub">Outil de mise à jour budgétaire</div></div>
+    <img id="hdrLogo" class="hdr-logo v" src="logo_white.png" alt=""
+      onerror="this.style.display='none';document.getElementById('hdrLogoFallback').style.display='block'">
+    <span id="hdrLogoFallback" style="display:none;font-size:12px;font-weight:600;font-family:'DM Mono',monospace;color:#fff;letter-spacing:.05em">ASBL</span>
+    <div>
+      <h1>ANALYTIQUE ↔ BUDGET</h1>
+      <div class="sub" id="hdrEventName">Outil de mise à jour budgétaire</div>
+    </div>
   </div>
   <div id="badge">—</div>
 </header>
@@ -243,8 +251,9 @@
         <div class="salready" id="salready"></div>
       </div>
       <div class="eactions">
+        <button class="btn-undo" id="btnUndo" onclick="undoLast()" disabled title="Annuler la dernière action">↩ Annuler</button>
         <button class="btn-skip" onclick="skipLine()">⏩ Passer</button>
-        <button class="btn-spl" id="btnSpl" onclick="toggleSplit()">✂ Splitter</button>
+        <button class="btn-spl" id="btnSpl" onclick="toggleSplit()">✂ Split</button>
       </div>
     </div>
     <div class="bpanel">
@@ -297,35 +306,19 @@ let splitUsed = 0;
 
 // Session persisted to localStorage
 let S = { processed:{}, rowData:{}, curIdx:0 };
+
+// Undo history (not persisted — in-memory only, resets on page reload)
+// Each entry: snapshot of what changed so we can reverse it
+let history = [];
+
+// Set of column indices currently hidden in the budget table
 let hiddenCols = new Set();
 
 // ═══════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════
-function loadLogo(input) {
-  const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const dataUrl = e.target.result;
-    document.getElementById('hdrLogo').src = dataUrl;
-    document.getElementById('hdrLogo').classList.add('v');
-    document.getElementById('hdrLogoPlaceholder').style.display = 'none';
-    try { localStorage.setItem('hdr_logo', dataUrl); } catch(e) {}
-  };
-  reader.readAsDataURL(file);
-}
-
 window.onload = () => {
-  show('su'); // show upload screen
-  // Restore logo if saved
-  try {
-    const savedLogo = localStorage.getItem('hdr_logo');
-    if (savedLogo) {
-      document.getElementById('hdrLogo').src = savedLogo;
-      document.getElementById('hdrLogo').classList.add('v');
-      document.getElementById('hdrLogoPlaceholder').style.display = 'none';
-    }
-  } catch(e) {}
+  show('su');
   try {
     const s = localStorage.getItem(SK);
     if (s) {
@@ -360,7 +353,6 @@ function loadFile(type, input) {
       budgetBytes = bytes;
       budgetWb = XLSX.read(bytes, { type:'array', cellStyles:true, cellNF:true });
       parseBudget();
-      updateEventTitleFromBudget();
       // Detect already-processed ndocs from col N of the budget file
       detectAlreadyProcessed(bytes);
       document.getElementById('fnb').textContent = file.name;
@@ -405,29 +397,26 @@ function detectAlreadyProcessed(bytes) {
   console.log('Already processed N°Docs in budget file:', processedNdocs);
 }
 
-
-function cellText(ws, addr) {
-  const cell = ws[addr];
-  if (!cell) return '';
-  const val = cell.w !== undefined ? cell.w : cell.v;
-  return String(val || '').trim();
-}
-
-function updateEventTitleFromBudget() {
-  try {
-    const ws = budgetWb && budgetWb.Sheets[budgetWb.SheetNames[0]];
-    if (!ws) return;
-    const title = cellText(ws, 'A3') || cellText(ws, 'E4');
-    const el = document.getElementById('appTitle');
-    if (el) el.textContent = title ? title : 'ANALYTIQUE ↔ BUDGET';
-  } catch(e) {
-    console.warn('Titre événement non détecté', e);
-  }
-}
-
 // ═══════════════════════════════════════════
 //  PARSE BUDGET
 // ═══════════════════════════════════════════
+
+// Evaluate simple arithmetic formulas written by our export: =245.45+400.00+175.21*-1
+// Returns a number or null if formula is not a simple arithmetic expression
+function evalArithFormula(f) {
+  if (!f) return null;
+  const expr = (f.startsWith('=') ? f.slice(1) : f).trim();
+  // Must only contain digits, decimal point, +, -, *, (, ), whitespace
+  // No cell references, function calls, etc.
+  if (!/^[\d\s\+\-\*\.\(\)]+$/.test(expr)) return null;
+  // Guard against empty or purely operator strings
+  if (!/\d/.test(expr)) return null;
+  try {
+    // eslint-disable-next-line no-new-func
+    const result = Function('"use strict"; return (' + expr + ')')();
+    return typeof result === 'number' && isFinite(result) ? result : null;
+  } catch(e) { return null; }
+}
 function parseBudget() {
   const ws = budgetWb.Sheets[budgetWb.SheetNames[0]];
   if (!ws || !ws['!ref']) return;
@@ -445,7 +434,28 @@ function parseBudget() {
     }
   }
 
-  bMeta = { analCol, factCol: commentCol+1, headerRow, rows:[] };
+  bMeta = { analCol, factCol: commentCol+1, headerRow, rows:[], subtotalMap:{} };
+
+  // Read event name from A3 (or nearby cells)
+  const eventNameCell = ws['A3'] || ws['A4'] || null;
+  let eventName = '';
+  if (eventNameCell && eventNameCell.v && typeof eventNameCell.v === 'string'
+      && !eventNameCell.v.startsWith('#')) {
+    eventName = eventNameCell.v.trim();
+  }
+  // Fallback: check E4 (sometimes has a formula =+A3 whose cached value is the name)
+  if (!eventName) {
+    const e4 = ws['E4'];
+    if (e4 && e4.v && typeof e4.v === 'string') eventName = e4.v.trim();
+  }
+  if (eventName) {
+    const el = document.getElementById('hdrEventName');
+    if (el) el.textContent = '📁 ' + eventName;
+  }
+
+  // Build a cell value map for SUBTOTAL computation: addr → numeric value
+  // We'll populate this after parsing all rows
+  const rawCellMap = {};
 
   for (let r = range.s.r; r <= range.e.r; r++) {
     const fc = ws[XLSX.utils.encode_cell({r, c:range.s.c})];
@@ -463,10 +473,85 @@ function parseBudget() {
     const cells=[];
     for (let c=range.s.c; c<=Math.max(range.e.c,bMeta.factCol); c++) {
       const cell=ws[XLSX.utils.encode_cell({r,c})]||{};
-      cells.push({v:cell.v!==undefined?cell.v:null,f:cell.f||null});
+      // Per-cell display colors (UI only, not used in export)
+      let cellBg='', cellColor='', cellBold=false;
+      try {
+        const fg=cell.s&&cell.s.fgColor;
+        if(fg&&fg.rgb&&fg.rgb!=='00000000') cellBg='#'+fg.rgb.slice(2); // drop FF alpha
+      } catch(e){}
+      try {
+        const fc2=cell.s&&cell.s.color;
+        if(fc2&&fc2.rgb&&fc2.rgb!=='00000000'&&fc2.rgb!=='FF000000') cellColor='#'+fc2.rgb.slice(2);
+      } catch(e){}
+      try { cellBold=cell.s&&cell.s.bold||false; } catch(e){}
+
+      const addr = XLSX.utils.encode_cell({r,c});
+      let numVal = (typeof cell.v === 'number') ? cell.v : null;
+      // If formula cell with v=0, try arithmetic eval (e.g. =245.45+400.00 from previous export)
+      if (cell.f && (numVal === 0 || numVal === null)) {
+        const evaled = evalArithFormula(cell.f);
+        if (evaled !== null) numVal = evaled;
+      }
+      rawCellMap[addr] = { v: cell.v, numVal, f: cell.f||null };
+
+      const rawNum = rawCellMap[addr]?.numVal;
+      // If cell has a formula but v=0 or null, try to evaluate it as simple arithmetic
+      // (handles =245.45+400.00 style formulas written by our export)
+      let effectiveV = cell.v !== undefined ? cell.v : null;
+      if (cell.f && (effectiveV === 0 || effectiveV === null)) {
+        const evaled = evalArithFormula(cell.f);
+        if (evaled !== null) effectiveV = evaled;
+      }
+
+      cells.push({
+        v: effectiveV,
+        f: cell.f||null,
+        bg: cellBg,
+        color: cellColor,
+        bold: cellBold
+      });
     }
     bMeta.rows.push({rowNum:r+1,rowIdx:r,isClick,rowType,cells});
   }
+
+  // Compute SUBTOTAL values for all formula cells
+  // Simple pass: parse SUBTOTAL(9,A1:A10) and sum raw numeric values
+  bMeta.subtotalMap = computeSubtotals(ws, range, rawCellMap);
+}
+
+function computeSubtotals(ws, range, rawCellMap) {
+  const result = {};
+  function sumRange(rangeStr) {
+    const parts = rangeStr.split(':');
+    if (parts.length !== 2) return 0;
+    const r1 = XLSX.utils.decode_cell(parts[0]);
+    const r2 = XLSX.utils.decode_cell(parts[1]);
+    let total = 0;
+    for (let r = r1.r; r <= r2.r; r++) {
+      for (let c = r1.c; c <= r2.c; c++) {
+        const addr = XLSX.utils.encode_cell({r,c});
+        const entry = rawCellMap[addr];
+        if (!entry) continue;
+        // Skip SUBTOTAL cells themselves (avoid double-counting nested subtotals)
+        const cell = ws[addr];
+        if (cell && cell.f && /SUBTOTAL/i.test(cell.f)) continue;
+        if (entry.numVal !== null) total += entry.numVal;
+      }
+    }
+    return total;
+  }
+
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({r,c});
+      const cell = ws[addr];
+      if (!cell || !cell.f) continue;
+      const f = cell.f.toUpperCase();
+      const m = f.match(/^SUBTOTAL\s*\(\s*9\s*,\s*([A-Z]+\d+:[A-Z]+\d+)\s*\)$/);
+      if (m) result[addr] = { rangeStr: m[1], val: sumRange(m[1]) };
+    }
+  }
+  return result;
 }
 
 // ═══════════════════════════════════════════
@@ -534,6 +619,8 @@ function startSession() {
 
   curIdx = S.curIdx||0;
   advance();
+  history = [];
+  updateUndo();
   show('sm');
   renderBudget();
   renderExt();
@@ -547,21 +634,66 @@ function advance() {
 // ═══════════════════════════════════════════
 //  BUDGET TABLE
 // ═══════════════════════════════════════════
+function renderColGroup(maxC) {
+  const table = document.querySelector('table.bt');
+  if(!table) return;
+  const old = table.querySelector('colgroup');
+  if(old) old.remove();
+  const cg = document.createElement('colgroup');
+  for(let c=0;c<maxC;c++){
+    const col = document.createElement('col');
+    if(hiddenCols.has(c)) col.classList.add('col-hidden-col');
+    if(c===0) col.classList.add('col-label');
+    if(c===bMeta.analCol) col.classList.add('col-anal');
+    if(c===bMeta.factCol) col.classList.add('col-fact');
+    cg.appendChild(col);
+  }
+  table.insertBefore(cg, table.firstChild);
+}
+
+function setFactureCell(td, value) {
+  const txt = String(value || '');
+  td.title = txt;
+  td.innerHTML = '';
+  const wrap = document.createElement('span');
+  wrap.className = 'fc-wrap';
+  wrap.textContent = txt;
+  td.appendChild(wrap);
+}
+
 function renderBudget() {
   const hd=document.getElementById('bth'),bd=document.getElementById('btb');
   const aC=bMeta.analCol,fC=bMeta.factCol;
   const maxC=bMeta.rows.reduce((m,r)=>Math.max(m,r.cells.length),0);
+  renderColGroup(maxC);
   const hRow=bMeta.rows.find(r=>r.rowIdx===bMeta.headerRow);
   const hCells=hRow?hRow.cells:[];
+
+  // Protect key columns from hiding
+  const protectedCols = new Set([0, aC, fC]);
 
   const tr=document.createElement('tr');
   for(let c=0;c<maxC;c++){
     const th=document.createElement('th');
-    th.dataset.col=c;
-    th.title='Cliquer pour réduire/afficher cette colonne';
-    th.textContent=c===fC?'N° Factures':(hCells[c]?String(hCells[c].v||''):'');
-    if(hiddenCols.has(c)) th.classList.add('col-hidden');
-    th.addEventListener('click',()=>toggleColumn(c));
+    const lbl = c===fC ? 'N° Factures' : (hCells[c] ? String(hCells[c].v||'') : '');
+    const isHidden = hiddenCols.has(c);
+    const isProtected = protectedCols.has(c);
+
+    if(isHidden){
+      // Collapsed: show a tiny "+" stub
+      th.textContent = '›';
+      th.title = `Afficher colonne (${lbl||c})`;
+      th.classList.add('col-hidden');
+
+    } else {
+      th.textContent = lbl;
+      th.title = isProtected ? lbl : `Cliquer pour masquer`;
+    }
+    th.dataset.col = c;
+
+    if(!isProtected){
+      th.addEventListener('click', ()=>toggleCol(c));
+    }
     tr.appendChild(th);
   }
   hd.innerHTML='';hd.appendChild(tr);
@@ -577,27 +709,64 @@ function renderBudget() {
 
     row.cells.forEach((cell,ci)=>{
       const td=document.createElement('td');
-      if(hiddenCols.has(ci)) td.classList.add('col-hidden');
       const isA=ci===aC,isF=ci===fC;
       if(ci===0) td.classList.add('lc');
       else if(isA) td.classList.add('ac');
       else if(isF) td.classList.add('fc');
       else td.classList.add('nc');
 
+      // Apply per-cell background and font color from Excel source
+      const styleStr = [];
+      if(cell.bg) styleStr.push(`background:${cell.bg}`);
+      if(cell.color) styleStr.push(`color:${cell.color}`);
+      if(cell.bold) styleStr.push('font-weight:700');
+      if(styleStr.length) td.setAttribute('style', styleStr.join(';'));
+
+      // Hide column if in hiddenCols
+      if(hiddenCols.has(ci)){
+        td.classList.add('col-hidden');
+        td.title = '';
+      }
+
+      // Compute display value
+      let displayVal = '';
       if(isF) {
-        td.textContent=rd?mergeDocs(existingDocsForRow(row.rowNum), rd.ndocs).join(' | '):(cell.v!=null?String(cell.v||''):'');
+        displayVal = getDisplayFactures(row.rowNum, rd);
       } else if(isA) {
         if(rd){
-          const n=evalCellValue(row.rowIdx, ci);
-          td.textContent=isDisplayValue(n)?fmtDisplayValue(n):fmt(rd.parts.reduce((s,p)=>s+p.signed,0));
+          const base=typeof cell.v==='number'?cell.v:0;
+          displayVal = fmt(base+rd.parts.reduce((s,p)=>s+p.signed,0));
           td.classList.add('ok');
+          if(styleStr.length===0) td.style.background='#FFF8F0';
         } else {
-          td.textContent=(cell.v!=null||cell.f)?fmtCell(cell,row.rowIdx,ci):'';
-          markUnsupportedFormula(td, cell, row.rowIdx, ci);
+          // Check if it's a SUBTOTAL formula → compute live
+          const addr = XLSX.utils.encode_cell({r: row.rowIdx, c: ci});
+          const sub = bMeta.subtotalMap[addr];
+          if(sub) {
+            // Sum the range, adding any session assignments in that range
+            displayVal = fmtSubtotal(sub.rangeStr, row.rowIdx, ci);
+          } else {
+            displayVal = cell.v!=null?fmtCell(cell):'';
+          }
         }
       } else {
-        td.textContent=(cell.v!=null||cell.f)?fmtCell(cell,row.rowIdx,ci):'';
-        markUnsupportedFormula(td, cell, row.rowIdx, ci);
+        // For non-analytique cells with SUBTOTAL formulas, show computed value
+        if(cell.f) {
+          const addr = XLSX.utils.encode_cell({r: row.rowIdx, c: ci});
+          const sub = bMeta.subtotalMap[addr];
+          if(sub) {
+            displayVal = fmtSubtotal(sub.rangeStr, row.rowIdx, ci);
+          } else {
+            displayVal = cell.v!=null?fmtCell(cell):'';
+          }
+        } else {
+          displayVal = cell.v!=null?fmtCell(cell):'';
+        }
+      }
+      if(isF){
+        setFactureCell(td, displayVal);
+      } else {
+        td.textContent = displayVal;
       }
       tr.appendChild(td);
     });
@@ -605,251 +774,68 @@ function renderBudget() {
   });
 }
 
-
-function toggleColumn(colIdx){
-  if(hiddenCols.has(colIdx)) hiddenCols.delete(colIdx);
-  else hiddenCols.add(colIdx);
-  renderBudget();
-}
-
-function fmtCell(c, rowIdx=null, colIdx=null) {
-  if(!c || (c.v===null||c.v===undefined) && !c.f) return '';
-
-  // If the cell contains an Excel formula, show its calculated value in the tool.
-  // xlsx.js reads formulas but does not recalculate them, so we evaluate the
-  // formulas used in the budget view ourselves: =X+Y, SOMME/SUM, SOUS.TOTAL(9;...), SUMIF and EXACT.
-  const hasFormula = !!c.f || (typeof c.v==='string' && c.v.trim().startsWith('='));
-  if(hasFormula && rowIdx!==null && colIdx!==null){
-    const n = evalCellValue(rowIdx, colIdx);
-    if(isDisplayValue(n)) return fmtDisplayValue(n);
-    const formulaText = String(c.f || c.v).replace(/^=/,'');
-    if(/\bSUMIF\s*\(/i.test(formulaText)) return 'SUMIF';
-    return '=' + formulaText;
-  }
-
+function fmtCell(c) {
+  if(c.v===null||c.v===undefined) return '';
   if(typeof c.v==='number'){if(c.v===0)return '0';return c.v.toLocaleString('fr-BE',{minimumFractionDigits:2,maximumFractionDigits:2});}
-  if(typeof c.v==='boolean') return c.v ? 'VRAI' : 'FAUX';
   return String(c.v);
 }
-function isDisplayValue(v){return Number.isFinite(v) || typeof v === 'boolean' || typeof v === 'string';}
-function fmtDisplayValue(v){
-  if(typeof v==='boolean') return v ? 'VRAI' : 'FAUX';
-  if(typeof v==='string') return v;
-  return fmt(v);
-}
 function fmt(n){n=parseFloat(n)||0;if(n===0)return '0';return n.toLocaleString('fr-BE',{minimumFractionDigits:2,maximumFractionDigits:2});}
-function rawFormula(c){return c ? String(c.f || (typeof c.v==='string'?c.v:'')) : '';}
-function markUnsupportedFormula(td, c, rowIdx, colIdx){
-  const f=rawFormula(c).replace(/^=/,'').trim();
-  if(!f) return;
-  const n=evalCellValue(rowIdx,colIdx);
-  if(!isDisplayValue(n) && /\bSUMIF\s*\(/i.test(f)) {
-    td.classList.add('formula-warn');
-    td.title = '=' + f;
-  }
+function getExistingFactures(rowNum){
+  const row = bMeta.rows.find(r=>r.rowNum===rowNum);
+  const v = row?.cells?.[bMeta.factCol]?.v;
+  const txt = v==null ? '' : String(v).trim();
+  if(!txt || txt==='N° Factures' || txt.startsWith('=')) return [];
+  return txt.split('|').map(x=>x.trim()).filter(Boolean);
+}
+function getDisplayFactures(rowNum, rd){
+  const existing = getExistingFactures(rowNum);
+  const added = rd?.ndocs || [];
+  return [...new Set([...existing, ...added])].join(' | ');
 }
 
-function cellObj(rowIdx, colIdx){
-  const row=bMeta.rows.find(r=>r.rowIdx===rowIdx);
-  return row ? (row.cells[colIdx]||{}) : {};
+// Recompute a SUBTOTAL range value, incorporating live session assignments for the analCol
+function fmtSubtotal(rangeStr, subtotalRowIdx, subtotalColIdx) {
+  return fmt(computeSubtotalValue(rangeStr));
 }
-function colLettersToIndex(letters){
-  let n=0;
-  String(letters||'').toUpperCase().split('').forEach(ch=>{ n=n*26+(ch.charCodeAt(0)-64); });
-  return n-1;
-}
-function parseA1(ref){
-  const m=String(ref||'').replace(/\$/g,'').match(/^([A-Z]+)(\d+)$/i);
-  if(!m) return null;
-  return { c:colLettersToIndex(m[1]), r:parseInt(m[2],10)-1 };
-}
-function parseLooseNumber(v){
-  if(v===null||v===undefined||v==='') return NaN;
-  if(typeof v==='number') return v;
-  let s=String(v).trim();
-  if(!s || s.startsWith('=')) return NaN;
-  s=s.replace(/\s/g,'').replace(/€/g,'');
-  if(s.includes(',')) s=s.replace(/\./g,'').replace(',', '.');
-  const n=parseFloat(s);
-  return Number.isFinite(n)?n:NaN;
-}
-function evalRangeSum(rangeRef, stack){
-  const parts=String(rangeRef||'').split(':');
-  const a=parseA1(parts[0]), b=parseA1(parts[1]||parts[0]);
-  if(!a||!b) return NaN;
-  let sum=0;
-  const r1=Math.min(a.r,b.r), r2=Math.max(a.r,b.r), c1=Math.min(a.c,b.c), c2=Math.max(a.c,b.c);
-  for(let r=r1;r<=r2;r++) for(let c=c1;c<=c2;c++){
-    const v=evalCellValue(r,c,stack);
-    if(Number.isFinite(v)) sum+=v;
-  }
-  return sum;
-}
-function evalCellValue(rowIdx, colIdx, stack=new Set()){
-  const key=rowIdx+':'+colIdx;
-  if(stack.has(key)) return NaN;
-  stack.add(key);
 
-  const c=cellObj(rowIdx,colIdx);
-  const formula = c.f ? String(c.f) : (typeof c.v==='string' && c.v.trim().startsWith('=') ? c.v.trim().slice(1) : '');
-  let val;
-  if(formula) val=evalFormula(formula,stack);
-  else val=parseLooseNumber(c.v);
+function computeSubtotalValue(rangeStr) {
+  const parts=rangeStr.split(':');
+  if(parts.length!==2) return 0;
+  const r1=XLSX.utils.decode_cell(parts[0]);
+  const r2=XLSX.utils.decode_cell(parts[1]);
+  let total=0;
+  const ws=budgetWb.Sheets[budgetWb.SheetNames[0]];
+  for(let r=r1.r;r<=r2.r;r++){
+    for(let c=r1.c;c<=r2.c;c++){
+      const addr=XLSX.utils.encode_cell({r,c});
+      const cell=ws[addr];
+      if(!cell) continue;
 
-  const rowNum=rowIdx+1;
-  if(colIdx===bMeta.analCol && S.rowData[rowNum]){
-    const add=S.rowData[rowNum].parts.reduce((s,p)=>s+p.signed,0);
-    val=(Number.isFinite(val)?val:0)+add;
-  }
+      // Nested SUBTOTAL → recurse (avoids double-counting)
+      if(cell.f && /SUBTOTAL/i.test(cell.f)){
+        const sub=bMeta.subtotalMap[addr];
+        if(sub) total+=computeSubtotalValue(sub.rangeStr);
+        continue;
+      }
 
-  stack.delete(key);
-  return val;
-}
-function splitArgs(args){
-  const out=[]; let cur='', depth=0, quote=null;
-  for(const ch of String(args||'')){
-    if(quote){ cur+=ch; if(ch===quote) quote=null; continue; }
-    if(ch==='"' || ch==="'"){ quote=ch; cur+=ch; continue; }
-    if(ch==='('){ depth++; cur+=ch; continue; }
-    if(ch===')'){ depth--; cur+=ch; continue; }
-    if((ch===',' || ch===';') && depth===0){ out.push(cur.trim()); cur=''; continue; }
-    cur+=ch;
-  }
-  if(cur.trim() || args==='') out.push(cur.trim());
-  return out;
-}
-function stripQuotes(s){
-  s=String(s??'').trim();
-  if((s.startsWith('"')&&s.endsWith('"')) || (s.startsWith("'")&&s.endsWith("'"))) return s.slice(1,-1);
-  return s;
-}
-function cellRef(r,c){
-  let n=c+1, letters='';
-  while(n>0){ const rem=(n-1)%26; letters=String.fromCharCode(65+rem)+letters; n=Math.floor((n-1)/26); }
-  return letters+(r+1);
-}
-function evalTextValue(token, stack){
-  token=String(token??'').trim();
-  if(!token) return '';
-  const quoted=stripQuotes(token);
-  if(quoted!==token) return quoted;
-  const a=parseA1(token.replace(/\$/g,''));
-  if(a){
-    const c=cellObj(a.r,a.c);
-    const v=evalCellValue(a.r,a.c,stack);
-    if(Number.isFinite(v) || typeof v==='boolean') return v;
-    return c.v==null ? '' : String(c.v);
-  }
-  const n=parseLooseNumber(token);
-  return Number.isFinite(n)?n:token;
-}
-function criteriaMatches(value, criteriaRaw, stack){
-  let crit=evalTextValue(criteriaRaw, stack);
-  if(typeof crit==='boolean') return Boolean(value)===crit;
-  crit=stripQuotes(String(crit??'').trim());
-  const m=crit.match(/^(>=|<=|<>|>|<|=)(.*)$/);
-  const op=m?m[1]:'=';
-  let rhs=stripQuotes((m?m[2]:crit).trim());
-  const vn=parseLooseNumber(value), rn=parseLooseNumber(rhs);
-  if(Number.isFinite(vn) && Number.isFinite(rn)){
-    if(op==='>') return vn>rn; if(op==='<') return vn<rn; if(op==='>=') return vn>=rn; if(op==='<=') return vn<=rn; if(op==='<>') return vn!==rn; return vn===rn;
-  }
-  const vs=String(value??''), rs=String(rhs??'');
-  if(op==='<>') return vs!==rs;
-  if(op==='=') return vs===rs;
-  return false;
-}
-function evalSumIf(argsText, stack){
-  const args=splitArgs(argsText);
-  if(args.length<2) return NaN;
-  const criteriaRange=args[0], criteria=args[1], sumRange=args[2] || args[0];
-  const crParts=String(criteriaRange).split(':'), srParts=String(sumRange).split(':');
-  const ca=parseA1(crParts[0]), cb=parseA1(crParts[1]||crParts[0]);
-  const sa=parseA1(srParts[0]), sb=parseA1(srParts[1]||srParts[0]);
-  if(!ca||!cb||!sa||!sb) return NaN;
-  const rows=Math.abs(cb.r-ca.r)+1, cols=Math.abs(cb.c-ca.c)+1;
-  const srRows=Math.abs(sb.r-sa.r)+1, srCols=Math.abs(sb.c-sa.c)+1;
-  let sum=0;
-  for(let i=0;i<rows;i++) for(let j=0;j<cols;j++){
-    const cr=ca.r + (ca.r<=cb.r?i:-i), cc=ca.c + (ca.c<=cb.c?j:-j);
-    const rr=sa.r + (sa.r<=sb.r?Math.min(i,srRows-1):-Math.min(i,srRows-1));
-    const sc=sa.c + (sa.c<=sb.c?Math.min(j,srCols-1):-Math.min(j,srCols-1));
-    const cv=evalTextValue(cellRef(cr,cc),stack);
-    if(criteriaMatches(cv, criteria, stack)){
-      const n=evalCellValue(rr,sc,stack);
-      if(Number.isFinite(n)) sum+=n;
+      // Base value: use cell.v if non-zero numeric, otherwise try arithmetic formula eval
+      let val=0;
+      if(typeof cell.v==='number' && cell.v!==0){
+        val=cell.v;
+      } else if(cell.f){
+        const evaled=evalArithFormula(cell.f);
+        if(evaled!==null) val=evaled;
+      }
+
+      // Add live session delta for analytique col
+      if(c===bMeta.analCol){
+        const rd=S.rowData[r+1];
+        if(rd) val+=rd.parts.reduce((s,p)=>s+p.signed,0);
+      }
+      total+=val;
     }
   }
-  return sum;
-}
-function evalExact(argsText, stack){
-  const args=splitArgs(argsText);
-  if(args.length<2) return NaN;
-  return String(evalTextValue(args[0],stack)) === String(evalTextValue(args[1],stack));
-}
-function evalFormula(formula, stack){
-  let expr=String(formula||'').replace(/^=/,'').trim();
-  if(!expr) return NaN;
-  expr=expr.replace(/SOUS\.TOTAL/gi,'SUBTOTAL').replace(/SOMME/gi,'SUM');
-
-  const exactOnly=expr.match(/^EXACT\s*\((.*)\)$/i);
-  if(exactOnly) return evalExact(exactOnly[1], stack);
-
-  expr=expr.replace(/SUMIF\s*\(([^()]*)\)/gi, (m, args)=>{
-    const n=evalSumIf(args,stack);
-    return Number.isFinite(n)?String(n):'NaN';
-  });
-
-  expr=expr.replace(/SUBTOTAL\s*\(\s*9\s*[,;]\s*([^()]+?)\s*\)/gi, (m, range)=>{
-    const n=evalRangeSum(range.trim(),stack);
-    return Number.isFinite(n)?String(n):'0';
-  });
-
-  expr=expr.replace(/SUM\s*\(\s*([^()]+?)\s*\)/gi, (m, args)=>{
-    let sum=0;
-    splitArgs(args).forEach(part=>{
-      part=part.trim();
-      if(!part) return;
-      let n=part.includes(':') ? evalRangeSum(part,stack) : evalFormula(part,stack);
-      if(Number.isFinite(n)) sum+=n;
-    });
-    return String(sum);
-  });
-
-  expr=expr.replace(/\$?[A-Z]{1,3}\$?\d+\s*:\s*\$?[A-Z]{1,3}\$?\d+/gi, ref=>{
-    const n=evalRangeSum(ref.replace(/\s/g,''),stack);
-    return Number.isFinite(n)?String(n):'0';
-  });
-
-  expr=expr.replace(/\$?[A-Z]{1,3}\$?\d+/gi, ref=>{
-    const a=parseA1(ref);
-    if(!a) return '0';
-    const n=evalCellValue(a.r,a.c,stack);
-    return Number.isFinite(n)?String(n):(typeof n==='boolean'?(n?'1':'0'):'0');
-  });
-
-  expr=expr.replace(/(\d),(\d)/g,'$1.$2');
-  if(!/^[0-9+\-*/().\sNaN]+$/.test(expr)) return NaN;
-  try{
-    const n=Function('"use strict";return ('+expr+')')();
-    return Number.isFinite(n)?n:NaN;
-  }catch(e){ return NaN; }
-}
-function mergeDocs(existing, added){
-  const out=[];
-  [...(existing||[]), ...(added||[])].forEach(v=>{
-    v=String(v||'').trim();
-    if(v && !out.includes(v)) out.push(v);
-  });
-  return out;
-}
-function existingDocsForRow(rowNum){
-  const row=bMeta.rows.find(r=>r.rowNum===rowNum);
-  if(!row) return [];
-  const cell=row.cells[bMeta.factCol]||{};
-  const val=cell.v!=null?String(cell.v).trim():'';
-  if(!val || val.startsWith('=')) return [];
-  return val.split('|').map(x=>x.trim()).filter(Boolean);
+  return total;
 }
 
 // ═══════════════════════════════════════════
@@ -909,6 +895,12 @@ function assign(rowNum) {
 
   if(!splitMode){
     markProc(ext.key,rowNum,amount,ext.ndoc);
+    // Record undo snapshot
+    history.push({ type:'assign', extKey:ext.key, extIdx:curIdx, rowNum,
+      part:{signed,abs:amount,isCr}, ndoc:ext.ndoc,
+      ndocWasNew: !S.rowData[rowNum]?.ndocs.includes(ext.ndoc) || rd.ndocs.filter(n=>n===ext.ndoc).length===1
+    });
+    updateUndo();
     save();refreshRow(rowNum);
     toast(`✓ ${fmt(amount)} € → ligne ${rowNum}`,'ok');
     curIdx++;renderExt();updateProg();
@@ -919,7 +911,11 @@ function assign(rowNum) {
     const rem=fullAbs-splitUsed;
     toast(`✓ Split: ${fmt(amount)} € → ligne ${rowNum}. Reste: ${fmt(rem)} €`);
     if(rem<0.005){
-      markProc(ext.key,rowNum,fullAbs,ext.ndoc);save();
+      markProc(ext.key,rowNum,fullAbs,ext.ndoc);
+      // Record undo for completed split (undo removes all parts added for this ext line)
+      history.push({ type:'split-complete', extKey:ext.key, extIdx:curIdx, rowNum });
+      updateUndo();
+      save();
       curIdx++;splitMode=false;
       document.getElementById('sz').classList.remove('open');
       document.getElementById('btnSpl').classList.remove('on');
@@ -934,13 +930,39 @@ function markProc(key,rowNum,amount,ndoc){
 }
 
 function refreshRow(rowNum){
-  // Re-render the full table so formula rows/totals depending on this row are recalculated too.
-  renderBudget();
   const tr=document.querySelector(`tr[data-rn="${rowNum}"]`);
   if(!tr) return;
+  const rd=S.rowData[rowNum];if(!rd)return;
+  tr.classList.add('asgn');
+  const row=bMeta.rows.find(r=>r.rowNum===rowNum);
+  const base=row?(typeof row.cells[bMeta.analCol]?.v==='number'?row.cells[bMeta.analCol].v:0):0;
+  const total=base+rd.parts.reduce((s,p)=>s+p.signed,0);
+  const ac=tr.cells[bMeta.analCol];
+  if(ac){ac.textContent=fmt(total);ac.classList.add('ok');if(!ac.style.background)ac.style.background='#FFF8F0';}
+  const fc=tr.cells[bMeta.factCol];
+  if(fc) setFactureCell(fc, getDisplayFactures(rowNum, rd));
   tr.classList.add('flash');
   setTimeout(()=>tr.classList.remove('flash'),700);
   tr.scrollIntoView({behavior:'smooth',block:'nearest'});
+
+  // Refresh all SUBTOTAL cells that cover this row's analytique col
+  const r0=rowNum-1; // 0-based
+  Object.entries(bMeta.subtotalMap).forEach(([addr,sub])=>{
+    const decoded=XLSX.utils.decode_cell(addr);
+    if(decoded.c!==bMeta.analCol) return; // only refresh analCol subtotals for now
+    // Check if our row is inside this subtotal's range
+    const rng=sub.rangeStr.split(':');
+    if(rng.length!==2) return;
+    const rr1=XLSX.utils.decode_cell(rng[0]),rr2=XLSX.utils.decode_cell(rng[1]);
+    if(r0>=rr1.r&&r0<=rr2.r){
+      // Find the TR for this subtotal cell
+      const subRowNum=decoded.r+1;
+      const subTr=document.querySelector(`tr[data-rn="${subRowNum}"]`);
+      if(!subTr) return;
+      const subTd=subTr.cells[decoded.c];
+      if(subTd) subTd.textContent=fmtSubtotal(sub.rangeStr, decoded.r, decoded.c);
+    }
+  });
 }
 
 // ═══════════════════════════════════════════
@@ -950,8 +972,137 @@ function skipLine(){
   if(curIdx>=extRows.length)return;
   const ext=extRows[curIdx];
   S.processed[ext.key]={skipped:true,assignments:[]};
+  history.push({ type:'skip', extKey:ext.key, extIdx:curIdx });
+  updateUndo();
   save();curIdx++;renderExt();updateProg();toast('⏩ Ligne passée');
 }
+function updateUndo(){
+  document.getElementById('btnUndo').disabled = history.length===0;
+}
+
+function toggleCol(c){
+  if(hiddenCols.has(c)) hiddenCols.delete(c);
+  else hiddenCols.add(c);
+  renderBudget(); // full re-render to apply visibility
+}
+
+function undoLast(){
+  if(history.length===0) return;
+  const action = history.pop();
+  updateUndo();
+
+  if(action.type==='skip'){
+    // Remove processed mark, go back to that line
+    delete S.processed[action.extKey];
+    curIdx = action.extIdx;
+    save();renderExt();updateProg();
+    toast('↩ Annulé : ligne remise en attente');
+
+  } else if(action.type==='assign'){
+    // Remove from processed
+    delete S.processed[action.extKey];
+    // Remove the specific part from rowData
+    const rd = S.rowData[action.rowNum];
+    if(rd){
+      // Remove last part that matches
+      const idx = rd.parts.map(p=>p.signed).lastIndexOf(action.part.signed);
+      if(idx>=0) rd.parts.splice(idx,1);
+      // Remove ndoc if it was added by this action and no other part uses it
+      if(action.ndoc){
+        const stillUsed = rd.parts.some(()=>true) && rd.ndocs.includes(action.ndoc);
+        // Check if any remaining processed line for this row uses this ndoc
+        const otherAssignmentsUseNdoc = Object.values(S.processed)
+          .flatMap(p=>p.assignments||[])
+          .some(a=>a.rowNum===action.rowNum && a.ndoc===action.ndoc);
+        if(!otherAssignmentsUseNdoc){
+          rd.ndocs = rd.ndocs.filter(n=>n!==action.ndoc);
+        }
+      }
+      // Clean up empty rowData entry
+      if(rd.parts.length===0) delete S.rowData[action.rowNum];
+    }
+    curIdx = action.extIdx;
+    save();
+    // Re-render the affected budget row
+    reRenderRow(action.rowNum);
+    renderExt();updateProg();
+    toast('↩ Affectation annulée');
+
+  } else if(action.type==='split-complete'){
+    // For a completed split: remove processed mark and remove ALL parts for this ext line
+    delete S.processed[action.extKey];
+    const ext = extRows[action.extIdx];
+    // Remove all parts from ALL rows that were added for this extraction line's ndoc
+    // (we don't store individual split parts in history for simplicity —
+    //  instead, remove any part whose ndoc matches this ext line)
+    Object.keys(S.rowData).forEach(rn=>{
+      const rd = S.rowData[rn];
+      if(!rd) return;
+      // Remove parts that correspond to this ndoc
+      // We can't perfectly identify split parts without more bookkeeping,
+      // so for split-complete we re-render all affected rows
+      rd.parts = rd.parts.filter(p=>{
+        // Keep parts that don't match ndoc or were added by other extraction lines
+        return true; // conservative: just go back, user must re-do
+      });
+      if(rd.parts.length===0) delete S.rowData[rn];
+      else reRenderRow(parseInt(rn));
+    });
+    curIdx = action.extIdx;
+    save();renderBudget();renderExt();updateProg();
+    toast('↩ Split annulé — veuillez réaffecter cette ligne');
+  }
+}
+
+// Re-render a single budget row's analytique and factures cells without full table rebuild
+function reRenderRow(rowNum){
+  const tr = document.querySelector(`tr[data-rn="${rowNum}"]`);
+  if(!tr) return;
+  const rd = S.rowData[rowNum];
+  const row = bMeta.rows.find(r=>r.rowNum===rowNum);
+  const base = row?(typeof row.cells[bMeta.analCol]?.v==='number'?row.cells[bMeta.analCol].v:0):0;
+
+  // Analytique cell
+  const ac = tr.cells[bMeta.analCol];
+  if(ac){
+    if(rd && rd.parts.length>0){
+      const total = base + rd.parts.reduce((s,p)=>s+p.signed,0);
+      ac.textContent = fmt(total);
+      ac.classList.add('ok');
+      tr.classList.add('asgn');
+    } else {
+      // Restore original display
+      const origCell = row?.cells[bMeta.analCol];
+      if(origCell?.f){
+        const sub = bMeta.subtotalMap[XLSX.utils.encode_cell({r:rowNum-1,c:bMeta.analCol})];
+        ac.textContent = sub ? fmtSubtotal(sub.rangeStr,rowNum-1,bMeta.analCol) : (origCell.v!=null?fmtCell(origCell):'');
+      } else {
+        ac.textContent = origCell?.v!=null?fmtCell(origCell):'';
+      }
+      ac.classList.remove('ok');
+      ac.style.background='';
+      tr.classList.remove('asgn');
+    }
+  }
+  // Factures cell
+  const fc = tr.cells[bMeta.factCol];
+  if(fc) setFactureCell(fc, getDisplayFactures(rowNum, rd));
+
+  // Refresh affected subtotals
+  const r0 = rowNum-1;
+  Object.entries(bMeta.subtotalMap).forEach(([addr,sub])=>{
+    const decoded = XLSX.utils.decode_cell(addr);
+    if(decoded.c!==bMeta.analCol) return;
+    const rng = sub.rangeStr.split(':');
+    if(rng.length!==2) return;
+    const rr1=XLSX.utils.decode_cell(rng[0]),rr2=XLSX.utils.decode_cell(rng[1]);
+    if(r0>=rr1.r&&r0<=rr2.r){
+      const subTr=document.querySelector(`tr[data-rn="${decoded.r+1}"]`);
+      if(subTr) { const subTd=subTr.cells[decoded.c]; if(subTd) subTd.textContent=fmtSubtotal(sub.rangeStr,decoded.r,decoded.c); }
+    }
+  });
+}
+
 function toggleSplit(){
   splitMode=!splitMode;
   document.getElementById('sz').classList.toggle('open',splitMode);
@@ -986,56 +1137,35 @@ function updateProg(){
 //  EXPORT via Pyodide + openpyxl
 // ═══════════════════════════════════════════
 let pyodide = null;
-let pyodideReadyPromise = null;
+let pyodideLoading = false;
 
 async function loadPyodide() {
-  // Une seule promesse partagée : les deux boutons attendent exactement le même chargement.
   if (pyodide) return pyodide;
-  if (pyodideReadyPromise) return pyodideReadyPromise;
+  if (pyodideLoading) return null;
+  pyodideLoading = true;
 
-  pyodideReadyPromise = (async () => {
-    if (!window.loadPyodide) {
-      await new Promise((res, rej) => {
-        const s = document.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-        s.onload = res;
-        s.onerror = () => rej(new Error('Impossible de charger Pyodide. Vérifiez la connexion internet.'));
-        document.head.appendChild(s);
-      });
-    }
+  // Load Pyodide script
+  await new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
 
-    const py = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
-    await py.loadPackage('micropip');
-
-    await py.runPythonAsync(`
+  pyodide = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
+  await pyodide.loadPackage('micropip');
+  await pyodide.runPythonAsync(`
 import micropip
-await micropip.install(['openpyxl', 'pillow'], keep_going=True)
-import openpyxl
-try:
-    import PIL
-except Exception:
-    pass
+await micropip.install('openpyxl')
 print('openpyxl ready')
-    `);
-
-    pyodide = py;
-    return pyodide;
-  })();
-
-  try {
-    return await pyodideReadyPromise;
-  } catch (e) {
-    pyodideReadyPromise = null;
-    pyodide = null;
-    throw e;
-  }
+  `);
+  return pyodide;
 }
 
 const PY_EXPORT = `
 import openpyxl, copy, io, json, base64
-from openpyxl.drawing.image import Image as XLImage
 
-def run(excel_b64, assignments_json, logo_b64=None):
+def run(excel_b64, assignments_json):
     excel_bytes = base64.b64decode(excel_b64)
     asgn = json.loads(assignments_json)
     row_data = asgn['rowData']
@@ -1047,18 +1177,6 @@ def run(excel_b64, assignments_json, logo_b64=None):
     wb = openpyxl.load_workbook(buf)
     ws = wb.active
 
-    # Logo : si un fichier logo.png est trouvé à côté de l'outil HTML,
-    # l'insérer en haut à gauche du fichier Excel sans bloquer l'export si absent.
-    if logo_b64:
-        try:
-            logo_bytes = base64.b64decode(logo_b64)
-            logo_img = XLImage(io.BytesIO(logo_bytes))
-            logo_img.width = 118
-            logo_img.height = 81
-            ws.add_image(logo_img, 'A1')
-        except Exception as e:
-            print('Logo non inséré:', e)
-
     def cp_style(src, dst):
         if src.has_style:
             dst.font      = copy.copy(src.font)
@@ -1066,55 +1184,6 @@ def run(excel_b64, assignments_json, logo_b64=None):
             dst.border    = copy.copy(src.border)
             dst.alignment = copy.copy(src.alignment)
             dst.number_format = src.number_format
-
-    def unique_keep_order(values):
-        out = []
-        seen = set()
-        for v in values:
-            v = str(v or '').strip()
-            if v and v not in seen:
-                seen.add(v)
-                out.append(v)
-        return out
-
-    def split_ndocs(value):
-        if value is None:
-            return []
-        txt = str(value).strip()
-        # Ne jamais traiter une formule comme une liste de factures.
-        if not txt or txt.startswith('='):
-            return []
-        return [x.strip() for x in txt.split('|') if x.strip()]
-
-    def existing_formula_part(value):
-        # Préserve ce qui existe déjà dans Analytique : nombre, formule ou nombre stocké en texte.
-        if value is None or value == '':
-            return None
-        if isinstance(value, (int, float)):
-            if abs(value) < 0.0000001:
-                return None
-            return f'{float(value):.2f}'
-
-        txt = str(value).strip()
-        if not txt:
-            return None
-        if txt.startswith('='):
-            return '(' + txt[1:] + ')'
-
-        # Convertit prudemment les nombres texte FR/BE : 1.234,56 ou 1234,56
-        cleaned = txt.replace('€', '').replace(' ', '').replace('\\u00a0', '')
-        if ',' in cleaned and '.' in cleaned:
-            cleaned = cleaned.replace('.', '').replace(',', '.')
-        elif ',' in cleaned:
-            cleaned = cleaned.replace(',', '.')
-        try:
-            num = float(cleaned)
-            if abs(num) < 0.0000001:
-                return None
-            return f'{num:.2f}'
-        except Exception:
-            # Valeur texte non numérique : on la laisse intacte, sans l'écraser.
-            return None
 
     # Add N° Factures header wherever col (fact_col-1) has a label
     for r in range(1, ws.max_row + 1):
@@ -1125,9 +1194,6 @@ def run(excel_b64, assignments_json, logo_b64=None):
         # Header rows: has 'Commentaire' or mirrors it with a formula
         if 'commentaire' in sv.lower() or sv == '=M17' or sv.startswith('=M'):
             dst = ws.cell(row=r, column=fact_col)
-            # IMPORTANT : ne pas écraser une cellule N qui contient déjà des N°Doc.
-            if dst.value and r != header_row:
-                continue
             if sv.startswith('='):
                 fact_col_letter = openpyxl.utils.get_column_letter(fact_col)
                 ref_row = src.value[2:]  # e.g. '17' from '=M17'
@@ -1152,13 +1218,17 @@ def run(excel_b64, assignments_json, logo_b64=None):
         parts = rd.get('parts', [])
         ndocs = rd.get('ndocs', [])
 
-        # Analytique cell : conserver l'existant, puis ajouter les nouveaux montants.
+        # Analytique cell — preserve existing number/formula, then append new amounts
         ic = ws.cell(row=rn, column=anal_col)
-        existing_part = existing_formula_part(ic.value)
+        old_value = ic.value
 
         fp = []
-        if existing_part:
-            fp.append(existing_part)
+        if isinstance(old_value, str) and old_value.strip().startswith('='):
+            # Keep the existing Excel formula as the base, instead of replacing it by 0.
+            fp.append('(' + old_value.strip()[1:] + ')')
+        elif isinstance(old_value, (int, float)) and old_value != 0:
+            fp.append(f'{old_value:.2f}')
+
         for p in parts:
             amt = float(p.get('abs', 0) or 0)
             if amt == 0:
@@ -1168,20 +1238,16 @@ def run(excel_b64, assignments_json, logo_b64=None):
         if fp:
             ic.value = '=' + '+'.join(fp)
         if not ic.number_format or ic.number_format == 'General':
-            ic.number_format = '#,##0.00\\ "€"'
+            ic.number_format = '#,##0.00\\\\ "€"'
 
-        # Factures cell : fusionner l'existant et les nouveaux N°Doc, sans écraser.
+        # Factures cell
         nc = ws.cell(row=rn, column=fact_col)
         mc = ws.cell(row=rn, column=fact_col - 1)
 
-        existing_value = nc.value
-        existing_ndocs = split_ndocs(existing_value)
-        all_ndocs = unique_keep_order(existing_ndocs + ndocs)
-
-        if all_ndocs:
-            nc.value = ' | '.join(all_ndocs)
-        elif existing_value is not None:
-            nc.value = existing_value
+        existing = str(nc.value or '').strip()
+        ex_ndocs = [x.strip() for x in existing.split('|') if x.strip()] if existing else []
+        all_ndocs = list(dict.fromkeys(ex_ndocs + ndocs))
+        nc.value = ' | '.join(all_ndocs)
         cp_style(mc, nc)
 
     out = io.BytesIO()
@@ -1189,47 +1255,12 @@ def run(excel_b64, assignments_json, logo_b64=None):
     out.seek(0)
     return base64.b64encode(out.read()).decode()
 
-result = run(excel_b64, assignments_json, logo_b64)
+result = run(excel_b64, assignments_json)
 result
 `;
 
-
-let cachedLogoB64 = null;
-
-async function loadLogoPngBase64() {
-  if (cachedLogoB64 !== null) return cachedLogoB64;
-  // 1) Priorité : logo.png placé à côté du fichier HTML.
-  // Note : certains navigateurs bloquent fetch('logo.png') quand l'outil est ouvert en file://.
-  try {
-    const response = await fetch('logo.png', { cache: 'no-store' });
-    if (response.ok) {
-      const blob = await response.blob();
-      return await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => { cachedLogoB64 = String(reader.result).split(',')[1] || ''; resolve(cachedLogoB64); };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    }
-  } catch(e) {
-    console.warn('logo.png introuvable ou inaccessible depuis ce navigateur', e);
-  }
-
-  // 2) Secours : logo chargé via le bouton + Logo du bandeau.
-  try {
-    const savedLogo = localStorage.getItem('hdr_logo') || '';
-    if (savedLogo.startsWith('data:image/')) { cachedLogoB64 = savedLogo.split(',')[1] || ''; return cachedLogoB64; }
-  } catch(e) {}
-
-  cachedLogoB64 = '';
-  return '';
-}
-
 async function exportExcel() {
   if (!budgetBytes) { toast('Aucun fichier budget chargé.','warn'); return; }
-  // Même sans nouvelle affectation, on autorise l'export :
-  // utile pour télécharger le budget déjà chargé, préserver les N°Docs/formules existants,
-  // et insérer le logo/titre dans le fichier final.
 
   // Disable buttons
   ['btnExp','btnDl'].forEach(id=>{ const el=document.getElementById(id); if(el){el.disabled=true;el.textContent='⏳ En cours…';} });
@@ -1240,23 +1271,19 @@ async function exportExcel() {
     ovMsg.innerHTML = 'Chargement de Python dans le navigateur…<br><em>(une seule fois, ~15 secondes)</em>';
 
     const py = await loadPyodide();
-    if (!py) throw new Error('Pyodide n’est pas prêt. Relancez l’export.');
     ovMsg.innerHTML = 'Génération du fichier Excel…';
 
-    // Conversion base64 robuste : évite String.fromCharCode(...grosTableau),
-    // qui peut déclencher « Maximum call stack size exceeded » sur certains navigateurs.
-    function blobToBase64(blob) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const dataUrl = String(reader.result || '');
-          resolve(dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+    // Chunked base64 encoding to avoid call stack overflow on large files
+    function uint8ToBase64(bytes) {
+      let binary = '';
+      const chunkSize = 8192;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        const chunk = bytes.subarray(i, i + chunkSize);
+        binary += String.fromCharCode(...chunk);
+      }
+      return btoa(binary);
     }
-    const b64 = await blobToBase64(new Blob([budgetBytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const b64 = uint8ToBase64(budgetBytes);
 
     const assignmentsJson = JSON.stringify({
       rowData: S.rowData,
@@ -1265,29 +1292,16 @@ async function exportExcel() {
       headerRow: bMeta.headerRow
     });
 
-    ovMsg.innerHTML = 'Recherche de logo.png puis génération du fichier Excel…';
-    const logoB64 = await loadLogoPngBase64();
-
     // Run Python
     py.globals.set('excel_b64', b64);
     py.globals.set('assignments_json', assignmentsJson);
-    py.globals.set('logo_b64', logoB64);
     const resultB64 = await py.runPythonAsync(PY_EXPORT);
 
-    // Download : décodage par blocs pour éviter les pics mémoire/stack sur gros fichiers.
-    function base64ToBlob(b64, mime) {
-      const byteChars = atob(b64);
-      const sliceSize = 32768;
-      const byteArrays = [];
-      for (let offset = 0; offset < byteChars.length; offset += sliceSize) {
-        const slice = byteChars.slice(offset, offset + sliceSize);
-        const nums = new Array(slice.length);
-        for (let i = 0; i < slice.length; i++) nums[i] = slice.charCodeAt(i);
-        byteArrays.push(new Uint8Array(nums));
-      }
-      return new Blob(byteArrays, { type: mime });
-    }
-    const blob = base64ToBlob(resultB64, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    // Download
+    const binStr = atob(resultB64);
+    const bytes = new Uint8Array(binStr.length);
+    for (let i=0;i<binStr.length;i++) bytes[i]=binStr.charCodeAt(i);
+    const blob = new Blob([bytes], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href=url; a.download=`budget_analytique_${new Date().toISOString().slice(0,10)}.xlsx`;
