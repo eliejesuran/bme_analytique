@@ -19,6 +19,17 @@ Outil développé pour le département finance d'une **ASBL communale bruxellois
 Les fichiers `index.html` et `logo_white.png` doivent être dans le **même dossier** pour que le logo s'affiche.
 
 ---
+## Métadonnées & authorship
+
+Balises meta présentes dans `index.html` :
+
+| Meta | Valeur |
+|---|---|
+| `author` | Elie JESURAN |
+| `copyright` | © 2026 Elie JESURAN |
+| `date` | 2026-04-28 |
+
+---
 
 ## Architecture technique
 
@@ -76,6 +87,12 @@ Les cellules `=SUBTOTAL(9,I19:I26)` sont recalculées en temps réel dans l'outi
 3. Ajoute les deltas de session (`S.rowData[rowNum].parts`)
 4. Gère les SUBTOTAL imbriqués récursivement sans double-comptage
 
+### Colonnes visibles vs cachées (dans le template EVENT)
+Certaines colonnes sont masquées dans Excel (hidden:true) :
+B, D, F, H, I, J, K sont cachées dans le template de référence.
+L'outil les affiche toutes mais elles peuvent être masquées via
+le mécanisme de toggle de colonnes (clic sur en-tête).
+
 ---
 
 ## Flux de l'extraction Winbooks
@@ -96,6 +113,11 @@ key = N°Doc + "§" + round(|solde| * 100) + "§" + commentaire[0:40]
 
 ### Détection des lignes déjà traitées (reprise de session)
 Au chargement du budget, l'outil lit la colonne N° Factures. Tout `N°Doc` trouvé dans cette colonne est marqué comme déjà traité → les lignes d'extraction correspondantes sont automatiquement sautées.
+
+### Note sur le fichier d'extraction
+N'importe quel nom de fichier .xlsx est accepté (plus de dépendance
+au nom "Historique périodique..."). La détection des colonnes se fait
+uniquement par le contenu des en-têtes (insensible accents + casse).
 
 ---
 
@@ -169,6 +191,17 @@ xlsx.js lit les styles Excel en format XF (indices). Les couleurs peuvent être 
 ### Filtre anti-artefact
 Les couleurs résolues avec une luminance < 0.08 (quasi-noires) sont ignorées pour l'affichage — ce sont des artefacts de lecture de cellules blanches avec `theme:0` (dk1).
 
+### Fonction `loadThemeColors(wb)`
+Appelée juste après `XLSX.read()`. Tente de lire `wb.Themes` (tableau
+exposé par xlsx.js en mode cellStyles:true). Si absent ou mal formé,
+reste sur la table Office standard `OFFICE_THEME`.
+
+### Ordre de priorité dans `resolveFill()`
+1. Si `patternType` absent ou `'none'` → pas de fond
+2. Si `fgColor.rgb` présent et non-transparent → utiliser directement
+3. Si `fgColor.theme` présent → résoudre via themeColors + applyTint()
+4. Si luminance résolue < 0.08 → ignorer (artefact dk1)
+
 ---
 
 ## Points connus / limitations
@@ -191,3 +224,74 @@ Les couleurs résolues avec une luminance < 0.08 (quasi-noires) sont ignorées p
 | v4 | Bouton undo, masquage de colonnes par clic header, nom événement dans header |
 | v5 | Détection ANALYTIQUE YYYY, fix double evalArith, description extraction générique |
 | v6 | Résolution couleurs thème (theme+tint), nettoyage code, documentation |
+| v6.1 | Regex ANALYTIQUE étendue (format YY et YYYY), balises meta author/copyright/date |
+| v6.1 | Regex ANALYTIQUE étendue `/^ANALYTIQUE(?:\s*(20)?(\d{2}))?$/`,
+         balises meta author/copyright/date (Elie JESURAN, 2026-04-28) |
+| v6.2 | (en cours) Couleurs de fond via résolution thème+tint,
+         nettoyage double evalArith, description extraction générique |
+
+
+---
+## État au 28 avril 2026 — fin de session
+
+### Travail en cours (non terminé)
+- **Couleurs de fond des cellules** : chantier initié mais pas finalisé.
+  La fonction `resolveFill()` est en place et gère RGB + thème+tint.
+  Problème identifié : les lignes "data" (blanches dans Excel) ont parfois
+  `theme:0 tint:0` (dk1=noir) comme fgColor → filtré via luminance < 0.08.
+  À tester sur un vrai fichier avec des couleurs variées pour valider.
+
+### Bugs connus
+- Le split-undo est conservateur : il supprime toutes les parts du rowData
+  mais ne peut pas identifier précisément quelles parts appartiennent à quel
+  split. L'utilisateur doit réaffecter depuis zéro après un undo de split.
+- `stillUsed` dans undoLast (type:'assign') est calculé mais jamais utilisé
+  pour la décision — la décision réelle repose sur `otherAssignmentsUseNdoc`.
+  Variable à nettoyer.
+- Les SUBTOTAL imbriqués (ex: I27 = SUBTOTAL de I18:I26 qui contient lui-même
+  des SUBTOTAL) sont gérés récursivement mais non testés en profondeur.
+
+### Décisions de design importantes (à ne pas oublier)
+- L'export passe par **Pyodide + openpyxl** (pas xlsx.js) pour préserver
+  fidèlement les styles Excel. Pyodide se charge paresseusement au premier
+  clic "Exporter".
+- La clé localStorage est `abv4`. Si tu changes la structure de S{},
+  incrémente la clé pour éviter des conflits avec des sessions anciennes.
+- La colonne N° Factures utilise `|` comme séparateur (avec espaces autour).
+  Ce séparateur est parsé dans `getExistingFactures()` et dans le script
+  Python `PY_EXPORT`. Ne pas changer sans mettre à jour les deux endroits.
+- Le script Python `PY_EXPORT` est une string template dans le JS.
+  Les `\\\\` dans `number_format` sont intentionnels (double-échappement
+  JS→Python→openpyxl).
+
+### Ce qui a été testé et fonctionne
+- Chargement budget + extraction, affectation, skip, split, undo
+- Export Pyodide avec formule additive dans col I
+- Reprise de session : détection des N°Doc déjà dans col N
+- SUBTOTAL recalculés en temps réel après affectation
+- evalArithFormula pour lire les formules =245.45+400.00 écrites par l'export
+- Masquage/affichage de colonnes par clic sur l'en-tête
+- Nom de l'événement lu depuis A3 affiché dans le header
+
+
+---
+## Prochaine session
+
+### À faire en priorité
+1. **Valider les couleurs de fond** sur un fichier budget réel avec des
+   couleurs variées — vérifier que `resolveFill()` donne le bon résultat
+   visuel pour les lignes rh (bleu clair), rs (bleu moyen), rt (totaux),
+   et que les data rows restent blanches.
+2. **Nettoyer `stillUsed`** dans `undoLast` (type:'assign') — variable
+   calculée mais inutilisée.
+3. **Tester ANALYTIQUE 2025 / ANALYTIQUE 25** — la nouvelle regex
+   `/^ANALYTIQUE(?:\s*(20)?(\d{2}))?$/` n'a pas encore été testée sur
+   un vrai fichier avec ce format.
+4. **Faire chercher la colonne N° Facture**  soit en créer une, soit la réutiliser, ce n'est pas fixe
+
+### Idées / demandes en attente
+- Visualisation finale léchée de l'output (mentionné en début de projet,
+  reporté "à terme")
+- Sous-totaux pour d'autres colonnes que ANALYTIQUE (REEL, MAJ...)
+- Support multi-feuilles dans le budget
+
