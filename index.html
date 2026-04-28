@@ -141,7 +141,7 @@
 
   tr.rh td{background:#D4EAF3;font-weight:700;font-size:11px}
   tr.rs td{background:#CEDBE6;font-weight:700}
-  tr.rt td{backfont-weight:700;font-family:'DM Mono',monospace;font-size:12px;background:#CCC8EE}
+  tr.rt td{font-weight:700;font-family:'DM Mono',monospace;font-size:12px;background:#FAFAF6}
   tr.rsum td{background:#F5F0E4;font-weight:700;font-family:'DM Mono',monospace}
   tr.rd{cursor:pointer}
   tr.rd:hover td{background:var(--hover)!important}
@@ -355,6 +355,7 @@ function loadFile(type, input) {
     if (type === 'b') {
       budgetBytes = bytes;
       budgetWb = XLSX.read(bytes, { type:'array', cellStyles:true, cellNF:true });
+      loadThemeColors(budgetWb);
       parseBudget();
       // Detect already-processed ndocs from col N of the budget file
       detectAlreadyProcessed(bytes);
@@ -401,6 +402,59 @@ function detectAlreadyProcessed(bytes) {
 }
 
 // ═══════════════════════════════════════════
+//  THEME COLOR RESOLVER
+// ═══════════════════════════════════════════
+
+// Standard Office theme color table (indices 0-9)
+// Read once from workbook; fallback to default Office theme if unavailable
+const OFFICE_THEME = ['000000','FFFFFF','44546A','E7E6E6','4472C4','ED7D31','A5A5A5','FFC000','5B9BD5','70AD47'];
+let themeColors = [...OFFICE_THEME];
+
+function loadThemeColors(wb) {
+  // xlsx.js exposes wb.Themes as an array of hex strings when cellStyles:true
+  try {
+    if (wb.Themes && Array.isArray(wb.Themes) && wb.Themes.length >= 10) {
+      themeColors = wb.Themes.map(c => (c||'').replace(/^FF/i,'').toUpperCase().padEnd(6,'0'));
+    }
+  } catch(e) {}
+}
+
+function applyTint(hex, tint) {
+  let r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+  if (tint >= 0) { r=Math.round(r+(255-r)*tint); g=Math.round(g+(255-g)*tint); b=Math.round(b+(255-b)*tint); }
+  else           { r=Math.round(r*(1+tint));       g=Math.round(g*(1+tint));       b=Math.round(b*(1+tint)); }
+  return [r,g,b].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('');
+}
+
+function resolveColor(c) {
+  if (!c) return '';
+  if (c.rgb && c.rgb !== '00000000' && c.rgb !== 'FF000000') {
+    const hex = c.rgb.length === 8 ? c.rgb.slice(2) : c.rgb;
+    return '#' + hex;
+  }
+  if (c.theme !== undefined && c.theme !== null) {
+    const base = themeColors[c.theme] || '000000';
+    const tint = typeof c.tint === 'number' ? c.tint : 0;
+    return '#' + applyTint(base, tint);
+  }
+  return '';
+}
+
+// Returns a CSS background color string, or '' if no visible fill
+// Skips fills that would produce very dark colors on data rows
+function resolveFill(fgColor, patternType) {
+  if (!fgColor || !patternType || patternType === 'none') return '';
+  const resolved = resolveColor(fgColor);
+  if (!resolved || resolved === '#000000' || resolved === '#FFFFFF') return '';
+  // Skip near-black fills (luminance < 0.08) — likely a theme artifact, not a visible fill
+  const hex = resolved.slice(1);
+  const r=parseInt(hex.slice(0,2),16), g=parseInt(hex.slice(2,4),16), b=parseInt(hex.slice(4,6),16);
+  const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+  if (lum < 0.08) return ''; // too dark → treat as no fill
+  return resolved;
+}
+
+// ═══════════════════════════════════════════
 //  PARSE BUDGET
 // ═══════════════════════════════════════════
 
@@ -425,40 +479,32 @@ function parseBudget() {
   if (!ws || !ws['!ref']) return;
   const range = XLSX.utils.decode_range(ws['!ref']);
 
-  // Find ANALYTIQUE / ANALYTIQUE YYYY (take highest year) and COMMENTAIRE col
-  // Strategy: scan header area, collect all matching cells with their year (0 if plain)
-  // then pick the one with the highest year that appears at least twice (products + charges)
+  // Find ANALYTIQUE / ANALYTIQUE YYYY (take highest year, count ≥2) and COMMENTAIRE col
   let analCol = 8, commentCol = 12, headerRow = 7;
   {
-    // Map: colIndex → {count, year, row}
     const analCandidates = {};
     for (let r = range.s.r; r <= Math.min(range.e.r, 25); r++) {
       for (let c = range.s.c; c <= range.e.c; c++) {
         const cell = ws[XLSX.utils.encode_cell({r,c})];
         if (!cell || !cell.v) continue;
         const v = String(cell.v).trim().toUpperCase();
-        // Match 'ANALYTIQUE' or 'ANALYTIQUE 2024', 'ANALYTIQUE 2025', 'ANALYTIQUE 24'etc.
         const m = v.match(/^ANALYTIQUE(?:\s*(20)?(\d{2}))?$/);
         if (m) {
           const year = m[1] ? parseInt(m[1]) : 0;
           if (!analCandidates[c]) analCandidates[c] = { count:0, year, row:r };
           analCandidates[c].count++;
-          // Keep the latest row seen (usually the second header block = charges)
           analCandidates[c].row = r;
         }
         if (v === 'COMMENTAIRE') commentCol = c;
       }
     }
-    // Among candidates appearing ≥2 times, pick highest year; tie-break: rightmost col
-    let bestYear = -1, bestCol = 8, bestRow = 7;
-    Object.entries(analCandidates).forEach(([colStr, info]) => {
-      if (info.count < 2) return;
-      const col = parseInt(colStr);
-      if (info.year > bestYear || (info.year === bestYear && col > bestCol)) {
-        bestYear = info.year; bestCol = col; bestRow = info.row;
-      }
+    let bestYear=-1, bestCol=8, bestRow=7;
+    Object.entries(analCandidates).forEach(([colStr,info])=>{
+      if(info.count < 2) return;
+      const col=parseInt(colStr);
+      if(info.year>bestYear||(info.year===bestYear&&col>bestCol)){bestYear=info.year;bestCol=col;bestRow=info.row;}
     });
-    analCol = bestCol; headerRow = bestRow;
+    analCol=bestCol; headerRow=bestRow;
   }
 
   bMeta = { analCol, factCol: commentCol+1, headerRow, rows:[], subtotalMap:{} };
@@ -501,14 +547,15 @@ function parseBudget() {
     for (let c=range.s.c; c<=Math.max(range.e.c,bMeta.factCol); c++) {
       const cell=ws[XLSX.utils.encode_cell({r,c})]||{};
       // Per-cell display colors (UI only, not used in export)
+      // Resolves RGB, theme+tint, and indexed fills from xlsx.js cell.s
       let cellBg='', cellColor='', cellBold=false;
-      try {
-        const fg=cell.s&&cell.s.fgColor;
-        if(fg&&fg.rgb&&fg.rgb!=='00000000') cellBg='#'+fg.rgb.slice(2); // drop FF alpha
-      } catch(e){}
+      try { cellBg = resolveFill(cell.s&&cell.s.fgColor, cell.s&&cell.s.patternType); } catch(e){}
       try {
         const fc2=cell.s&&cell.s.color;
-        if(fc2&&fc2.rgb&&fc2.rgb!=='00000000'&&fc2.rgb!=='FF000000') cellColor='#'+fc2.rgb.slice(2);
+        if(fc2) {
+          const resolved = resolveColor(fc2);
+          if(resolved && resolved!=='#000000' && resolved!=='#FFFFFF') cellColor=resolved;
+        }
       } catch(e){}
       try { cellBold=cell.s&&cell.s.bold||false; } catch(e){}
 
@@ -521,7 +568,7 @@ function parseBudget() {
       }
       rawCellMap[addr] = { v: cell.v, numVal, f: cell.f||null };
 
-      // Use the already-computed numVal as effectiveV (avoids double eval)
+      // effectiveV: prefer the already-computed numVal (avoids re-evaluating the formula)
       const effectiveV = numVal !== null ? numVal : (cell.v !== undefined ? cell.v : null);
 
       cells.push({
