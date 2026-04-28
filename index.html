@@ -1,4 +1,7 @@
 <!DOCTYPE html>
+<meta name="author" content="Elie JESURAN">
+<meta name="copyright" content="© 2026 Elie JESURAN">
+<meta name="date" content="2026-04-28">
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -138,7 +141,7 @@
 
   tr.rh td{background:#D4EAF3;font-weight:700;font-size:11px}
   tr.rs td{background:#CEDBE6;font-weight:700}
-  tr.rt td{font-weight:700;font-family:'DM Mono',monospace;font-size:12px;background:#FAFAF6}
+  tr.rt td{backfont-weight:700;font-family:'DM Mono',monospace;font-size:12px;background:#CCC8EE}
   tr.rsum td{background:#F5F0E4;font-weight:700;font-family:'DM Mono',monospace}
   tr.rd{cursor:pointer}
   tr.rd:hover td{background:var(--hover)!important}
@@ -207,7 +210,7 @@
     </div>
     <div class="ucard" id="ce">
       <input type="file" accept=".xlsx,.xls" onchange="loadFile('e',this)">
-      <div class="ico">📋</div><h3>Extraction Winbooks</h3><p>Historique périodique analytique</p>
+      <div class="ico">📋</div><h3>Extraction Winbooks</h3><p>Extraction analytique (.xlsx)</p>
       <div class="fn" id="fne"></div>
     </div>
   </div>
@@ -422,16 +425,40 @@ function parseBudget() {
   if (!ws || !ws['!ref']) return;
   const range = XLSX.utils.decode_range(ws['!ref']);
 
-  // Find ANALYTIQUE (second occurrence) and COMMENTAIRE col
-  let analCol = 8, commentCol = 12, headerRow = 7, analFound = 0;
-  for (let r = range.s.r; r <= Math.min(range.e.r, 25); r++) {
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const cell = ws[XLSX.utils.encode_cell({r,c})];
-      if (!cell || !cell.v) continue;
-      const v = String(cell.v).trim().toUpperCase();
-      if (v === 'ANALYTIQUE') { analFound++; if (analFound === 2) { analCol=c; headerRow=r; } }
-      if (v === 'COMMENTAIRE') commentCol = c;
+  // Find ANALYTIQUE / ANALYTIQUE YYYY (take highest year) and COMMENTAIRE col
+  // Strategy: scan header area, collect all matching cells with their year (0 if plain)
+  // then pick the one with the highest year that appears at least twice (products + charges)
+  let analCol = 8, commentCol = 12, headerRow = 7;
+  {
+    // Map: colIndex → {count, year, row}
+    const analCandidates = {};
+    for (let r = range.s.r; r <= Math.min(range.e.r, 25); r++) {
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const cell = ws[XLSX.utils.encode_cell({r,c})];
+        if (!cell || !cell.v) continue;
+        const v = String(cell.v).trim().toUpperCase();
+        // Match 'ANALYTIQUE' or 'ANALYTIQUE 2024', 'ANALYTIQUE 2025', 'ANALYTIQUE 24'etc.
+        const m = v.match(/^ANALYTIQUE(?:\s*(20)?(\d{2}))?$/);
+        if (m) {
+          const year = m[1] ? parseInt(m[1]) : 0;
+          if (!analCandidates[c]) analCandidates[c] = { count:0, year, row:r };
+          analCandidates[c].count++;
+          // Keep the latest row seen (usually the second header block = charges)
+          analCandidates[c].row = r;
+        }
+        if (v === 'COMMENTAIRE') commentCol = c;
+      }
     }
+    // Among candidates appearing ≥2 times, pick highest year; tie-break: rightmost col
+    let bestYear = -1, bestCol = 8, bestRow = 7;
+    Object.entries(analCandidates).forEach(([colStr, info]) => {
+      if (info.count < 2) return;
+      const col = parseInt(colStr);
+      if (info.year > bestYear || (info.year === bestYear && col > bestCol)) {
+        bestYear = info.year; bestCol = col; bestRow = info.row;
+      }
+    });
+    analCol = bestCol; headerRow = bestRow;
   }
 
   bMeta = { analCol, factCol: commentCol+1, headerRow, rows:[], subtotalMap:{} };
@@ -494,14 +521,8 @@ function parseBudget() {
       }
       rawCellMap[addr] = { v: cell.v, numVal, f: cell.f||null };
 
-      const rawNum = rawCellMap[addr]?.numVal;
-      // If cell has a formula but v=0 or null, try to evaluate it as simple arithmetic
-      // (handles =245.45+400.00 style formulas written by our export)
-      let effectiveV = cell.v !== undefined ? cell.v : null;
-      if (cell.f && (effectiveV === 0 || effectiveV === null)) {
-        const evaled = evalArithFormula(cell.f);
-        if (evaled !== null) effectiveV = evaled;
-      }
+      // Use the already-computed numVal as effectiveV (avoids double eval)
+      const effectiveV = numVal !== null ? numVal : (cell.v !== undefined ? cell.v : null);
 
       cells.push({
         v: effectiveV,
