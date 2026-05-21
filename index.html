@@ -87,9 +87,9 @@
   .efield{display:flex;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)}
   .efield:last-child{border-bottom:none}
   .eflbl{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.04em;min-width:86px;padding-top:1px;flex-shrink:0}
-  .efval{font-size:12px;font-weight:500;line-height:1.4;word-break:break-word}
+  .efval{font-size:12px;font-weight:500;color:var(--muted);line-height:1.4;word-break:break-word}
   .efval.mono{font-family:'DM Mono',monospace}
-  .efval.comment{font-size:13px;font-weight:600;color:var(--text);background:#FFF9EC;border-left:3px solid #E6B800;padding:4px 8px;border-radius:0 4px 4px 0;display:block;}
+  .efval.comment{font-size:14px;font-weight:600;color:var(--text);background:#FFF9EC;border-left:3px solid #E6B800;border-right:3px solid #E6B800;padding:4px 8px;border-radius:0 4px 4px 0;display:block;}
 
   /* SPLIT */
   .splitzone{display:none;padding:14px 18px;border-top:1px solid var(--border);background:var(--split-light)}
@@ -1418,7 +1418,7 @@ function reviewTable() {
   if(warea) warea.style.gridTemplateColumns='1fr';
   // Adapter le hint
   const chint = document.getElementById('chint');
-  if(chint){ chint.textContent = '👁 Mode révision — cliquez sur une ligne pour continuer à affecter'; chint.classList.add('v'); }
+  if(chint){ chint.textContent = '👁 Mode révision — Lecture uniquement - Appuyez sur Exporter Excel pour télécharger le budget'; chint.classList.add('v'); }
   renderBudget();
 }
 
