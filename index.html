@@ -89,6 +89,7 @@
   .eflbl{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.04em;min-width:86px;padding-top:1px;flex-shrink:0}
   .efval{font-size:12px;font-weight:500;line-height:1.4;word-break:break-word}
   .efval.mono{font-family:'DM Mono',monospace}
+  .efval.comment{font-size:13px;font-weight:600;color:var(--text);background:#FFF9EC;border-left:3px solid #E6B800;padding:4px 8px;border-radius:0 4px 4px 0;display:block;}
 
   /* SPLIT */
   .splitzone{display:none;padding:14px 18px;border-top:1px solid var(--border);background:var(--split-light)}
@@ -232,10 +233,16 @@
   <div class="warea">
     <div class="epanel">
       <div class="phdr">
-        <span id="navLbl">— / —</span>
+        <div style="display:flex;flex-direction:column;gap:2px">
+          <span style="font-size:9px;opacity:.6;letter-spacing:.12em">EXTRACTION</span>
+          <span id="extNdocLbl" style="font-size:11px;letter-spacing:.04em;opacity:.95">—</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="navLbl" style="font-size:9px;opacity:.7;letter-spacing:.06em">— / —</span>
         <div class="navbtns">
           <button onclick="navExt(-1)" id="navP" disabled>‹</button>
           <button onclick="navExt(+1)" id="navN" disabled>›</button>
+        </div>
         </div>
       </div>
       <div class="eamtblk">
@@ -260,7 +267,7 @@
       </div>
     </div>
     <div class="bpanel">
-      <div class="chint v" id="chint">↓ Cliquez sur une ligne budgétaire pour y affecter le montant</div>
+      <div class="chint v" id="chint">↓ Cliquez sur la ligne budgétaire correspondant à la ligne d'extraction</div>
       <div class="bwrap">
         <table class="bt"><thead id="bth"></thead><tbody id="btb"></tbody></table>
       </div>
@@ -278,6 +285,7 @@
     <div id="skipitems"></div>
   </div>
   <button class="btn-dl" id="btnDl" onclick="exportExcel()">⬇ Télécharger le budget mis à jour</button>
+  <button class="btn-ghost" onclick="reviewTable()">👁 Revoir le tableau</button>
   <button class="btn-ghost" onclick="resetAll()">↺ Nouvelle session</button>
 </div>
 
@@ -924,7 +932,16 @@ function renderExt() {
     ['Libellé',ext.libelle],['Commentaire',ext.commentaire||'—'],
     ['Nom',ext.nom||'—'],['N°Doc',ext.ndoc||'—'],
     ['Date',ext.date||'—'],['Période',ext.periode||'—'],['Journal',ext.journal||'—']
-  ].map(([l,v])=>`<div class="efield"><span class="eflbl">${l}</span><span class="efval${l==='N°Doc'?' mono':''}">${v}</span></div>`).join('');
+  ].map(([l,v])=>{
+    const isComment = l==='Commentaire';
+    const isMono = l==='N°Doc';
+    const cls = isComment ? 'comment' : (isMono ? 'mono' : '');
+    return `<div class="efield"><span class="eflbl">${l}</span><span class="efval${cls?' '+cls:''}">${v}</span></div>`;
+  }).join('');
+
+  const ndocDisplay = ext.ndoc ? ext.ndoc : '—';
+  const journalDisplay = ext.journal ? ` · ${ext.journal}` : '';
+  document.getElementById('extNdocLbl').textContent = ndocDisplay + journalDisplay;
 
   const total=extRows.length,rem=extRows.filter(e=>!S.processed[e.key]).length;
   document.getElementById('navLbl').textContent=`${curIdx+1}/${total} · ${rem} restantes`;
@@ -1391,6 +1408,20 @@ async function exportExcel() {
 // ═══════════════════════════════════════════
 //  DONE
 // ═══════════════════════════════════════════
+function reviewTable() {
+  // Retour à l'écran principal en mode révision (plus de lignes d'extraction à traiter)
+  show('sm');
+  // Masquer le panneau extraction, élargir le tableau
+  const epanel = document.querySelector('.epanel');
+  const warea = document.querySelector('.warea');
+  if(epanel) epanel.style.display='none';
+  if(warea) warea.style.gridTemplateColumns='1fr';
+  // Adapter le hint
+  const chint = document.getElementById('chint');
+  if(chint){ chint.textContent = '👁 Mode révision — cliquez sur une ligne pour continuer à affecter'; chint.classList.add('v'); }
+  renderBudget();
+}
+
 function showDone() {
   show('sd');
   const skipped=extRows.filter(e=>S.processed[e.key]?.skipped);

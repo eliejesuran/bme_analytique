@@ -51,6 +51,9 @@ https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wgh
 - **localStorage** (`abv4`) — session sauvegardée automatiquement à chaque action
 - Le logo n'est **pas** persisté en localStorage (il est chargé via `src="logo_white.png"`)
 - L'historique undo est **en mémoire uniquement** (perdu au rechargement)
+- detectAlreadyProcessed(ws, analCol, factCol) est appelée à la fin de parseBudget avec les colonnes fraîchement détectées
+- Elle reconstruit S.rowData[rowNum].parts en parsant les formules arithmétiques pures (=245.45+175.00*-1) écrites par un export précédent
+- Les cellules analytique contenant ces formules ont leur effectiveV forcé à 0 dans rawCellMap pour éviter le double-comptage
 
 ---
 
@@ -154,8 +157,10 @@ uniquement par le contenu des en-têtes (insensible accents + casse).
 Le bouton "Exporter Excel" déclenche :
 1. Chargement **paresseux** de Pyodide (~15s, une seule fois par session navigateur)
 2. Installation d'openpyxl via micropip
-3. Encodage base64 chunked du fichier budget (chunks de 8192 octets, évite le stack overflow)
+3. Encodage base64 via FileReader.readAsDataURL() (async, évite le stack overflow sur gros fichiers) [NE FONCTIONNE PAS]
 4. Exécution du script Python `PY_EXPORT` dans Pyodide
+5. L'export ne sauvegarde que la feuille active — les autres feuilles sont supprimées du workbook avant sauvegarde (681KB → ~18KB)
+6. Les bytes sont encodés en base64 via FileReader (async) et non via btoa() (qui provoque un stack overflow sur les gros fichiers)
 
 ### Ce que le script Python fait
 - Charge le workbook original avec openpyxl (préserve TOUS les styles, couleurs, bordures)
@@ -251,6 +256,11 @@ reste sur la table Office standard `OFFICE_THEME`.
 - Les SUBTOTAL imbriqués (ex: I27 = SUBTOTAL de I18:I26 qui contient lui-même
   des SUBTOTAL) sont gérés récursivement mais non testés en profondeur.
 
+### Bugs corrigés
+- `XLSX.read()` avec `cellStyles:true` sur fichier multi-feuilles (49 feuilles) → stack overflow → corrigé par lecture en deux passes : `bookSheets:true` pour les noms, puis `sheets:[selectedSheet]` pour les styles de la feuille active uniquement
+- SUBTOTAL double-comptage → corrigé par `collectLeafCells()` itératif (BFS avec `seenRanges Set)
+- Détection `analCol` : les cellules formule (`cell.f` truthy) sont ignorées — seules les occurrences littérales comptent
+
 ### Décisions de design importantes (à ne pas oublier)
 - L'export passe par **Pyodide + openpyxl** (pas xlsx.js) pour préserver
   fidèlement les styles Excel. Pyodide se charge paresseusement au premier
@@ -288,6 +298,13 @@ reste sur la table Office standard `OFFICE_THEME`.
    `/^ANALYTIQUE(?:\s*(20)?(\d{2}))?$/` n'a pas encore été testée sur
    un vrai fichier avec ce format.
 4. **Faire chercher la colonne N° Facture**  soit en créer une, soit la réutiliser, ce n'est pas fixe
+5. ✅ ~~**Highlight la ligne COMMENTAIRE**~~
+6. ✅ ~~**Indiquer dans le cadre "EXTRACTION"**~~
+7. ✅ ~~**Cliquer sur la ligne budgétaire correspondant à la ligne d'extraction**~~
+8. ⚠️ **Une fois toutes les lignes traitées, avoir la possibilité de relire tout le tableau, avant d'aller sur le dernier écran** **BUG**
+9. **Avoir la possibilité de rajouter des lignes dans le budget**
+10. **Bouton Annuler ne fonctionne pas pour les split**
+11. **Curseur rouge pour les lignes passées et vert pour les cliquées, et pouvoir revenir dessus**
 
 ### Idées / demandes en attente
 - Visualisation finale léchée de l'output (mentionné en début de projet,
