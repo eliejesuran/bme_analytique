@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <meta name="author" content="Elie JESURAN">
 <meta name="copyright" content="© 2026 Elie JESURAN">
-<meta name="date" content="2026-04-28">
+<meta name="date" content="2026-05-22">
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -89,7 +89,7 @@
   .eflbl{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:.04em;min-width:86px;padding-top:1px;flex-shrink:0}
   .efval{font-size:12px;font-weight:500;color:var(--muted);line-height:1.4;word-break:break-word}
   .efval.mono{font-family:'DM Mono',monospace}
-  .efval.comment{font-size:14px;font-weight:600;color:var(--text);background:#FFF9EC;border-left:3px solid #E6B800;border-right:3px solid #E6B800;padding:4px 8px;border-radius:0 4px 4px 0;display:block;}
+  .efval.comment{font-size:13px;font-weight:600;color:var(--text);background:#FFF9EC;border-left:3px solid #E6B800;border-right:3px solid #E6B800;padding:4px 8px;border-radius:0 4px 4px 0;display:block;}
 
   /* SPLIT */
   .splitzone{display:none;padding:14px 18px;border-top:1px solid var(--border);background:var(--split-light)}
@@ -917,8 +917,8 @@ function computeSubtotalValue(rangeStr) {
 // ═══════════════════════════════════════════
 //  EXTRACTION CARD
 // ═══════════════════════════════════════════
-function renderExt() {
-  advance();
+function renderExt(skipAdvance) {
+  if(!skipAdvance) advance();
   if(curIdx>=extRows.length){showDone();return;}
   const ext=extRows[curIdx];
   const isCr=ext.solde<0,abs=Math.abs(ext.solde);
@@ -1408,17 +1408,30 @@ async function exportExcel() {
 // ═══════════════════════════════════════════
 //  DONE
 // ═══════════════════════════════════════════
+function resumeSession() {
+  const epanel = document.querySelector('.epanel');
+  const warea = document.querySelector('.warea');
+  if(epanel) epanel.style.display='';
+  if(warea) warea.style.gridTemplateColumns='';
+  const chint = document.getElementById('chint');
+  if(chint){ chint.textContent = '↓ Cliquez sur la ligne budgétaire correspondant à la ligne d\'extraction'; chint.classList.add('v'); }
+  // Rewind to last processed line so user can undo/review
+  curIdx = Math.max(0, extRows.length - 1);
+  renderExt(true);
+  updateProg();
+}
+
 function reviewTable() {
-  // Retour à l'écran principal en mode révision (plus de lignes d'extraction à traiter)
   show('sm');
-  // Masquer le panneau extraction, élargir le tableau
   const epanel = document.querySelector('.epanel');
   const warea = document.querySelector('.warea');
   if(epanel) epanel.style.display='none';
   if(warea) warea.style.gridTemplateColumns='1fr';
-  // Adapter le hint
   const chint = document.getElementById('chint');
-  if(chint){ chint.textContent = '👁 Mode révision — Lecture uniquement - Appuyez sur Exporter Excel pour télécharger le budget'; chint.classList.add('v'); }
+  if(chint){
+    chint.innerHTML = '👁 Mode révision &nbsp;—&nbsp; <button onclick="resumeSession()" style="background:var(--accent);color:#fff;border:none;padding:3px 12px;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer;font-family:\'DM Sans\',sans-serif;">▶ Reprendre l\'affectation</button>';
+    chint.classList.add('v');
+  }
   renderBudget();
 }
 

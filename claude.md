@@ -301,7 +301,7 @@ reste sur la table Office standard `OFFICE_THEME`.
 5. ✅ ~~**Highlight la ligne COMMENTAIRE**~~
 6. ✅ ~~**Indiquer dans le cadre "EXTRACTION"**~~
 7. ✅ ~~**Cliquer sur la ligne budgétaire correspondant à la ligne d'extraction**~~
-8. ⚠️ **Une fois toutes les lignes traitées, avoir la possibilité de relire tout le tableau, avant d'aller sur le dernier écran** **BUG**
+8. ✅ ~~**Une fois toutes les lignes traitées, avoir la possibilité de relire tout le tableau, avant d'aller sur le dernier écran**~~ --> Mais peut être amélioré
 9. **Avoir la possibilité de rajouter des lignes dans le budget**
 10. **Bouton Annuler ne fonctionne pas pour les split**
 11. **Curseur rouge pour les lignes passées et vert pour les cliquées, et pouvoir revenir dessus**
