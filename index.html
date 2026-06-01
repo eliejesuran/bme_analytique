@@ -516,6 +516,7 @@ function parseBudget() {
   }
 
   bMeta = { analCol, factCol: commentCol+1, headerRow, rows:[], subtotalMap:{} };
+  console.log(`[parseBudget] analCol:${analCol} (col ${String.fromCharCode(65+analCol)}) | commentCol:${commentCol} → factCol:${commentCol+1} (col ${String.fromCharCode(65+commentCol+1)}) | headerRow:${headerRow+1}`);
 
   // Read event name from A3 (or nearby cells)
   const eventNameCell = ws['A3'] || ws['A4'] || null;
@@ -588,14 +589,18 @@ function parseBudget() {
         bold: cellBold
       });
     }
-    // Track current section (PRODUITS / CHARGES) from rh headers
-    // Scan first 4 cols — label may be in col B or C for aesthetic reasons
-    if (rowType === 'rh') {
-      for (let sc = range.s.c; sc <= Math.min(range.s.c + 3, range.e.c); sc++) {
-        const sc_cell = ws[XLSX.utils.encode_cell({r, c: sc})];
-        const txt = (sc_cell && sc_cell.v ? String(sc_cell.v) : '').toUpperCase();
-        if (txt.includes('PRODUIT')) { currentSection = 'produits'; break; }
-        if (txt.includes('CHARGE'))  { currentSection = 'charges';  break; }
+    // Section detection: scan first 4 cols of EVERY row for exact labels.
+    // Exact match avoids "PRODUITS ORDI" / "CHARGES EXTRA" false positives.
+    // Decoupled from rowType (raw RGB color unreliable for theme-colored cells).
+    for (let sc = range.s.c; sc <= Math.min(range.s.c + 3, range.e.c); sc++) {
+      const sc_cell = ws[XLSX.utils.encode_cell({r, c: sc})];
+      if (!sc_cell || !sc_cell.v) continue;
+      const txt = String(sc_cell.v).trim().toUpperCase();
+      if (txt === 'PRODUITS' || txt === 'RECETTES' || txt === 'PRODUIT' || txt === 'RECETTE') {
+        currentSection = 'produits'; break;
+      }
+      if (txt === 'CHARGES' || txt === 'CHARGE' || txt === 'DÉPENSES' || txt === 'DEPENSES') {
+        currentSection = 'charges'; break;
       }
     }
     bMeta.rows.push({rowNum:r+1,rowIdx:r,isClick,rowType,section:currentSection,cells});
@@ -1244,22 +1249,28 @@ async function loadPyodide() {
   if (pyodideLoading) return null;
   pyodideLoading = true;
 
-  // Load Pyodide script
-  await new Promise((res, rej) => {
-    const s = document.createElement('script');
-    s.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
-    s.onload = res; s.onerror = rej;
-    document.head.appendChild(s);
-  });
+  try {
+    // Load Pyodide script
+    await new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js';
+      s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
 
-  pyodide = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
-  await pyodide.loadPackage('micropip');
-  await pyodide.runPythonAsync(`
+    const py = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.25.0/full/' });
+    await py.loadPackage('micropip');
+    await py.runPythonAsync(`
 import micropip
 await micropip.install('openpyxl')
 print('openpyxl ready')
-  `);
-  return pyodide;
+    `);
+    pyodide = py; // only cached after successful install
+    return pyodide;
+  } catch(e) {
+    pyodideLoading = false; // allow retry on next export click
+    throw e;
+  }
 }
 
 const PY_EXPORT = `
@@ -1350,6 +1361,7 @@ def run(excel_b64, assignments_json):
         nc.value = ' | '.join(all_ndocs)
         cp_style(mc, nc)
 
+    wb.template = False  # prevent template content-type that makes Excel refuse the file
     out = io.BytesIO()
     wb.save(out)
     out.seek(0)
