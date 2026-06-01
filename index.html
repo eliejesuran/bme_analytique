@@ -537,6 +537,7 @@ function parseBudget() {
   // Build a cell value map for SUBTOTAL computation: addr → numeric value
   // We'll populate this after parsing all rows
   const rawCellMap = {};
+  let currentSection = null; // 'produits' | 'charges' | null
 
   for (let r = range.s.r; r <= range.e.r; r++) {
     const fc = ws[XLSX.utils.encode_cell({r, c:range.s.c})];
@@ -587,7 +588,17 @@ function parseBudget() {
         bold: cellBold
       });
     }
-    bMeta.rows.push({rowNum:r+1,rowIdx:r,isClick,rowType,cells});
+    // Track current section (PRODUITS / CHARGES) from rh headers
+    // Scan first 4 cols — label may be in col B or C for aesthetic reasons
+    if (rowType === 'rh') {
+      for (let sc = range.s.c; sc <= Math.min(range.s.c + 3, range.e.c); sc++) {
+        const sc_cell = ws[XLSX.utils.encode_cell({r, c: sc})];
+        const txt = (sc_cell && sc_cell.v ? String(sc_cell.v) : '').toUpperCase();
+        if (txt.includes('PRODUIT')) { currentSection = 'produits'; break; }
+        if (txt.includes('CHARGE'))  { currentSection = 'charges';  break; }
+      }
+    }
+    bMeta.rows.push({rowNum:r+1,rowIdx:r,isClick,rowType,section:currentSection,cells});
   }
 
   // Compute SUBTOTAL values for all formula cells
@@ -972,10 +983,14 @@ function assign(rowNum) {
     amount=v;
   } else amount=fullAbs;
 
-  const signed=isCr?-amount:amount;
+  const rowSection = bMeta.rows.find(r=>r.rowNum===rowNum)?.section;
+  const isProduits = rowSection === 'produits';
+  // In PRODUITS section, sign is inverted (amounts are entered negatively in the budget)
+  const effectiveIsCr = isProduits ? !isCr : isCr;
+  const signed = effectiveIsCr ? -amount : amount;
   if(!S.rowData[rowNum]) S.rowData[rowNum]={parts:[],ndocs:[]};
   const rd=S.rowData[rowNum];
-  rd.parts.push({signed,abs:amount,isCr});
+  rd.parts.push({signed,abs:amount,isCr:effectiveIsCr});
   if(ext.ndoc&&!rd.ndocs.includes(ext.ndoc)) rd.ndocs.push(ext.ndoc);
 
   if(!splitMode){
