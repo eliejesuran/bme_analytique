@@ -1439,8 +1439,11 @@ function resumeSession() {
   if(warea) warea.style.gridTemplateColumns='';
   const chint = document.getElementById('chint');
   if(chint){ chint.textContent = '↓ Cliquez sur la ligne budgétaire correspondant à la ligne d\'extraction'; chint.classList.add('v'); }
-  curIdx = S.curIdx || 0;
-  renderExt();
+  // Première ligne non traitée ; si toutes traitées → dernière ligne (pour undo/navigation)
+  let idx = 0;
+  while (idx < extRows.length - 1 && S.processed[extRows[idx].key]) idx++;
+  curIdx = idx;
+  renderExt(true); // skipAdvance : ne pas sauter les lignes déjà traitées
   updateProg();
 }
 
