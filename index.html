@@ -386,7 +386,6 @@ function detectAlreadyProcessed(bytes) {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
   const fC = bMeta.factCol; // 0-based col index
-  const aC = bMeta.analCol;
 
   const processedNdocs = new Set();
 
@@ -498,7 +497,7 @@ function parseBudget() {
         const v = String(cell.v).trim().toUpperCase();
         const m = v.match(/^ANALYTIQUE(?:\s*(20)?(\d{2}))?$/);
         if (m) {
-          const year = m[1] ? parseInt(m[1]) : 0;
+          const year = m[2] ? parseInt((m[1]||'20')+m[2]) : 0;
           if (!analCandidates[c]) analCandidates[c] = { count:0, year, row:r };
           analCandidates[c].count++;
           analCandidates[c].row = r;
@@ -1002,8 +1001,7 @@ function assign(rowNum) {
     markProc(ext.key,rowNum,amount,ext.ndoc);
     // Record undo snapshot
     history.push({ type:'assign', extKey:ext.key, extIdx:curIdx, rowNum,
-      part:{signed,abs:amount,isCr}, ndoc:ext.ndoc,
-      ndocWasNew: !S.rowData[rowNum]?.ndocs.includes(ext.ndoc) || rd.ndocs.filter(n=>n===ext.ndoc).length===1
+      part:{signed,abs:amount,isCr}, ndoc:ext.ndoc
     });
     updateUndo();
     save();refreshRow(rowNum);
@@ -1114,7 +1112,6 @@ function undoLast(){
       if(idx>=0) rd.parts.splice(idx,1);
       // Remove ndoc if it was added by this action and no other part uses it
       if(action.ndoc){
-        const stillUsed = rd.parts.some(()=>true) && rd.ndocs.includes(action.ndoc);
         // Check if any remaining processed line for this row uses this ndoc
         const otherAssignmentsUseNdoc = Object.values(S.processed)
           .flatMap(p=>p.assignments||[])
@@ -1225,7 +1222,7 @@ function updateSplitUI(){
   el.className='sv'+(after<-0.005?' over':after<0.005?' done':'');
   document.getElementById('salready').textContent=splitUsed>0?`Déjà affecté : ${fmt(splitUsed)} €  ·  Disponible : ${fmt(avail)} €`:'';
 }
-function navExt(d){const ni=curIdx+d;if(ni<0||ni>=extRows.length)return;curIdx=ni;renderExt();}
+function navExt(d){const ni=curIdx+d;if(ni<0||ni>=extRows.length)return;curIdx=ni;save();renderExt(true);}
 
 // ═══════════════════════════════════════════
 //  PROGRESS
@@ -1442,9 +1439,8 @@ function resumeSession() {
   if(warea) warea.style.gridTemplateColumns='';
   const chint = document.getElementById('chint');
   if(chint){ chint.textContent = '↓ Cliquez sur la ligne budgétaire correspondant à la ligne d\'extraction'; chint.classList.add('v'); }
-  // Rewind to last processed line so user can undo/review
-  curIdx = Math.max(0, extRows.length - 1);
-  renderExt(true);
+  curIdx = S.curIdx || 0;
+  renderExt();
   updateProg();
 }
 
