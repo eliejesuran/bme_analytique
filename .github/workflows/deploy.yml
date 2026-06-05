@@ -1,0 +1,23 @@
+name: Deploy to Infomaniak
+
+on:
+  push:
+    branches: [main]
+    paths: [index.html]   # ne se déclenche que si index.html a changé
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Upload index.html via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_HOST }}
+          username: ${{ secrets.FTP_USER }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: ${{ secrets.FTP_PATH }}
+          local-dir: ./
+          include: |
+            index.html
